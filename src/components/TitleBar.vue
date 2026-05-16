@@ -2,15 +2,17 @@
 import { computed } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useAppStore } from '../stores/app'
+import { useServiceManager } from '../composables/useServiceManager'
 import { SERVICES } from '../types/services'
 
 const store = useAppStore()
+const { activeServiceId } = useServiceManager()
 const win = getCurrentWindow()
 
 const activeServiceName = computed(() => {
-  if (!store.activeSessionId) return 'ChatPlex'
-  const svc = SERVICES.find(s => s.id === store.activeSessionId)
-  return svc?.name || store.activeSession?.title || 'ChatPlex'
+  if (!activeServiceId.value) return 'ChatPlex'
+  const svc = SERVICES.find(s => s.id === activeServiceId.value)
+  return svc?.name || 'ChatPlex'
 })
 
 function minimize() { win.minimize() }

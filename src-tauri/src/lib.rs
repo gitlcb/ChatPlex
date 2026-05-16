@@ -134,14 +134,53 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![chat_stream, eval_js, encrypt_value, decrypt_value])
         .setup(|app| {
-            // Hide to tray on close instead of quitting
             use tauri::Manager;
+            use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
+            use tauri::menu::{Menu, MenuItemBuilder};
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+            // Register global shortcuts
             let gs = app.global_shortcut();
             let _ = gs.on_shortcuts(["ctrl+n", "ctrl+/", "ctrl+,"], |app, shortcut, _event| {
                 use tauri::Emitter;
                 let _ = app.emit("global-shortcut", format!("{}", shortcut));
             });
+
+            // System tray
+            let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .tooltip("ChatPlex - AI 一站式对话")
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // Hide to tray on close instead of quitting
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
