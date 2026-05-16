@@ -139,17 +139,19 @@ export function useServiceManager() {
         const size = await mainWindow.innerSize();
         const scaleFactor = await mainWindow.scaleFactor();
         const logical = size.toLogical(scaleFactor);
+        const titlebarHeight = 36;
         const contentWidth = logical.width - sidebarWidth.value;
+        const contentHeight = logical.height - titlebarHeight;
 
         log(`Creating webview "${label}" → ${service.url}`);
-        log(`Window size: ${logical.width}x${logical.height}, Content area: ${contentWidth}x${logical.height}, Offset: ${sidebarWidth.value}`);
+        log(`Window size: ${logical.width}x${logical.height}, Content area: ${contentWidth}x${contentHeight}, Offset: ${sidebarWidth.value}`);
 
         const newWv = new Webview(mainWindow, label, {
           url: service.url,
           x: sidebarWidth.value,
-          y: 0,
+          y: titlebarHeight,
           width: contentWidth,
-          height: logical.height,
+          height: contentHeight,
         });
 
         log(`Webview constructor called for ${label}, waiting for creation event...`);
@@ -291,9 +293,11 @@ export function useServiceManager() {
       const size = await mainWindow.innerSize();
       const scaleFactor = await mainWindow.scaleFactor();
       const logical = size.toLogical(scaleFactor);
+      const titlebarHeight = 36;
       const contentWidth = logical.width - sidebarWidth.value;
-      await wv.setPosition(new LogicalPosition(sidebarWidth.value, 0));
-      await wv.setSize(new LogicalSize(contentWidth, logical.height));
+      const contentHeight = logical.height - titlebarHeight;
+      await wv.setPosition(new LogicalPosition(sidebarWidth.value, titlebarHeight));
+      await wv.setSize(new LogicalSize(contentWidth, contentHeight));
     } catch (e) {
       log(`resizeWebview error: ${e}`);
     }
