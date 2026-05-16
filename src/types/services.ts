@@ -1,6 +1,6 @@
 export type ServiceRegion = 'domestic' | 'international';
 export type ServiceCategory = 'chat' | 'visual';
-export type ServiceType = 'webview' | 'chat';
+export type ServiceType = 'webview' | 'chat' | 'visual';
 
 export interface AIService {
   id: string;
