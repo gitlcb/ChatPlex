@@ -248,7 +248,7 @@ function handleServiceClose(serviceId: string) {
 <style scoped>
 .sidebar {
   width: 200px;
-  height: 100vh;
+  height: 100%;
   background: #0c1017;
   border-right: 1px solid #1a2435;
   display: flex;

@@ -41,7 +41,6 @@
     "window-state:default",
     "global-shortcut:default",
     "store:default",
-    "dialog:default",
-    "updater:default"
+    "dialog:default"
   ]
 }

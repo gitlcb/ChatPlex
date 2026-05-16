@@ -421,7 +421,7 @@ onMounted(() => { store.loadSessions(); fetchModels() })
 </template>
 
 <style scoped>
-.fc-dark { display: flex; flex-direction: column; height: 100vh; background: var(--bg-primary, #0a0f16); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans SC', sans-serif; color: var(--text-primary, #e2e8f0); }
+.fc-dark { display: flex; flex-direction: column; height: 100%; background: var(--bg-primary, #0a0f16); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans SC', sans-serif; color: var(--text-primary, #e2e8f0); }
 .fc-error { padding: 10px 16px; background: rgba(239,68,68,0.1); border-bottom: 1px solid rgba(239,68,68,0.2); color: #f87171; font-size: 13px; text-align: center; }
 .fc-layout { flex: 1; display: flex; overflow: hidden; }
 

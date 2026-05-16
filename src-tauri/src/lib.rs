@@ -125,7 +125,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcuts(["ctrl+n", "ctrl+/", "ctrl+,"]).unwrap()
             .with_handler(|app, shortcut, _event| {
                 use tauri::Emitter;
                 let _ = app.emit("global-shortcut", format!("{}", shortcut));
@@ -133,11 +132,16 @@ pub fn run() {
             .build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![chat_stream, eval_js, encrypt_value, decrypt_value])
         .setup(|app| {
             // Hide to tray on close instead of quitting
             use tauri::Manager;
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            let gs = app.global_shortcut();
+            let _ = gs.on_shortcuts(["ctrl+n", "ctrl+/", "ctrl+,"], |app, shortcut, _event| {
+                use tauri::Emitter;
+                let _ = app.emit("global-shortcut", format!("{}", shortcut));
+            });
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
