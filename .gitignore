@@ -33,3 +33,6 @@ screenshot*.png
 
 # OS files
 Thumbs.db
+
+# Claude Code workspace
+.claude/

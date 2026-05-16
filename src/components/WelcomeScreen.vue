@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { useServiceManager } from '../composables/useServiceManager';
-import { SERVICES } from '../types/services';
 
-const { openService } = useServiceManager();
+const { openService, filteredServices } = useServiceManager();
 </script>
 
 <template>
@@ -20,7 +19,7 @@ const { openService } = useServiceManager();
         </svg>
       </div>
       <h1 class="welcome-title">ChatPlex</h1>
-      <p class="welcome-subtitle">国产AI，一站式对话</p>
+      <p class="welcome-subtitle">AI 一站式对话</p>
       <div class="welcome-divider"></div>
       <p class="welcome-desc">
         告别在多个网站之间来回切换的烦恼<br/>
@@ -32,7 +31,7 @@ const { openService } = useServiceManager();
     <div class="quick-launch">
       <div class="quick-grid">
         <button
-          v-for="service in SERVICES"
+          v-for="service in filteredServices"
           :key="service.id"
           class="quick-card"
           :style="{ '--card-color': service.color }"

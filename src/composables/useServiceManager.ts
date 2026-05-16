@@ -1,14 +1,39 @@
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { Webview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
-import { SERVICES } from '../types/services';
+import { invoke } from '@tauri-apps/api/core';
+import { SERVICES, type ServiceRegion, type ServiceCategory } from '../types/services';
 
-// Singleton state — shared across all components
+// ========== Singleton State ==========
 const activeServiceId = ref<string | null>(null);
 const loadedServices = reactive<Set<string>>(new Set());
-const sidebarWidth = ref(256);
+const loadingServiceId = ref<string | null>(null);
+const errorMessages = reactive<Map<string, string>>(new Map());
+const sidebarWidth = ref(200);
 const sidebarExpanded = ref(true);
+
+// Filter state
+const activeRegion = ref<ServiceRegion>('domestic');
+const activeCategory = ref<ServiceCategory>('chat');
+const filteredServices = computed(() =>
+  SERVICES.filter(s => s.region === activeRegion.value && s.category === activeCategory.value)
+);
+
+// Debug logs — visible in UI for troubleshooting
+const debugLogs = reactive<string[]>([]);
+function log(msg: string) {
+  const time = new Date().toLocaleTimeString();
+  debugLogs.unshift(`[${time}] ${msg}`);
+  if (debugLogs.length > 50) debugLogs.length = 50;
+  console.log(`[ChatPlex] ${msg}`);
+}
+const showDebug = ref(false);
+
+// Chat refresh signal
+const chatRefreshKey = ref(0);
+
+// Webview instance tracking
 const webviewInstances = new Map<string, Webview>();
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -17,109 +42,247 @@ export function useServiceManager() {
     const service = SERVICES.find((s) => s.id === serviceId);
     if (!service) return;
 
+    log(`Opening service: ${service.name} (${service.url})`);
+
     // Clicking same service → just refocus
     if (activeServiceId.value === serviceId) {
+      log(`Service ${serviceId} is already active, refocusing`);
       const wv = webviewInstances.get(serviceId);
       if (wv) {
-        try { await wv.setFocus(); } catch { /* ignore */ }
+        try { await wv.setFocus(); } catch (e) { log(`Refocus failed: ${e}`); }
       }
       return;
     }
 
+    // Clear previous error
+    errorMessages.delete(serviceId);
+
+    // For built-in chat services, just switch active state (no webview)
+    if (service.type === 'chat') {
+      // Hide previous webview if any
+      if (activeServiceId.value) {
+        const prevWv = webviewInstances.get(activeServiceId.value);
+        if (prevWv) {
+          try { await prevWv.hide(); } catch { /* ok */ }
+        }
+      }
+      loadedServices.delete(serviceId);
+      activeServiceId.value = serviceId;
+      loadingServiceId.value = null;
+      log(`Switched to built-in chat: ${serviceId}`);
+      return;
+    }
+
+    loadingServiceId.value = serviceId;
+
     // Hide previous service webview
     if (activeServiceId.value) {
-      const prevWv = webviewInstances.get(activeServiceId.value);
+      const prevId = activeServiceId.value;
+      const prevWv = webviewInstances.get(prevId);
       if (prevWv) {
         try {
           await prevWv.hide();
-        } catch {
-          webviewInstances.delete(activeServiceId.value);
+          log(`Hidden previous service: ${prevId}`);
+        } catch (e) {
+          log(`Failed to hide ${prevId}: ${e}`);
+          webviewInstances.delete(prevId);
         }
       }
     }
 
-    const label = `svc-${serviceId}`;
+    const label = `svc_${serviceId}`;
 
-    // Check if webview already exists
+    // Check if webview already exists in our map
     let wv: Webview | undefined = webviewInstances.get(serviceId);
+    if (wv) {
+      log(`Found existing webview for ${serviceId}`);
+    }
 
+    // Also check via Tauri API
     if (!wv) {
       try {
         const existing = await Webview.getByLabel(label);
         if (existing) {
           wv = existing;
           webviewInstances.set(serviceId, wv);
+          log(`Recovered existing webview: ${label}`);
         }
-      } catch {
-        // doesn't exist, will create new below
+      } catch (e) {
+        log(`getByLabel error (expected if not created): ${e}`);
       }
     }
 
     if (wv) {
-      // Show existing webview and resize to current window
+      // Show existing webview and resize
       try {
+        await wv.setPosition(new LogicalPosition(sidebarWidth.value, 0));
+        const mainWindow = getCurrentWindow();
+        const size = await mainWindow.innerSize();
+        const scaleFactor = await mainWindow.scaleFactor();
+        const logical = size.toLogical(scaleFactor);
+        await wv.setSize(new LogicalSize(logical.width - sidebarWidth.value, logical.height));
         await wv.show();
-        await resizeWebview(wv);
         await wv.setFocus();
-      } catch {
+        log(`Re-showed existing webview: ${label}`);
+      } catch (e) {
+        log(`Failed to show existing webview: ${e}`);
         webviewInstances.delete(serviceId);
+        loadedServices.delete(serviceId);
         wv = undefined;
       }
     }
 
     if (!wv) {
-      // Create new webview within the same window
+      // Create new webview
       try {
         const mainWindow = getCurrentWindow();
         const size = await mainWindow.innerSize();
         const scaleFactor = await mainWindow.scaleFactor();
-        const logicalSize = size.toLogical(scaleFactor);
-        const contentWidth = logicalSize.width - sidebarWidth.value;
+        const logical = size.toLogical(scaleFactor);
+        const contentWidth = logical.width - sidebarWidth.value;
+
+        log(`Creating webview "${label}" → ${service.url}`);
+        log(`Window size: ${logical.width}x${logical.height}, Content area: ${contentWidth}x${logical.height}, Offset: ${sidebarWidth.value}`);
 
         const newWv = new Webview(mainWindow, label, {
           url: service.url,
           x: sidebarWidth.value,
           y: 0,
           width: contentWidth,
-          height: logicalSize.height,
+          height: logical.height,
         });
 
+        log(`Webview constructor called for ${label}, waiting for creation event...`);
+
         newWv.once('tauri://created', () => {
-          console.log(`[ChatPlex] Webview created: ${label}`);
+          log(`✅ Webview CREATED successfully: ${label}`);
+          webviewInstances.set(serviceId, newWv);
+          loadedServices.add(serviceId);
+          loadingServiceId.value = null;
+
+          if (serviceId === 'free-draw') {
+            const injectScript = () => {
+              invoke('eval_js', {
+                label,
+                script: `
+                  (function() {
+                    if (window.__chatplexKeyInjected) return;
+                    window.__chatplexKeyInjected = true;
+                    const key = 'sk-i12sAS7aPZw5DEwHD9uAsAZJCZEKeNwe';
+                    console.log('[ChatPlex] Auto-fill script injected');
+
+                    const lsKeys = ['apiKey', 'api_key', 'key', 'openaiKey', 'openai_key', 'openai-api-key', 'OPENAI_API_KEY', 'token', 'accessToken', 'access_token', 'siliconflow-key', 'snownk-key'];
+                    lsKeys.forEach(k => { try { localStorage.setItem(k, key); } catch(e){} });
+                    try { localStorage.setItem('settings', JSON.stringify({ apiKey: key, key: key, token: key })); } catch(e){}
+
+                    const setNative = (el, val) => {
+                      const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                      const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+                      setter.call(el, val);
+                      el.dispatchEvent(new Event('input', { bubbles: true }));
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      el.dispatchEvent(new Event('blur', { bubbles: true }));
+                    };
+
+                    const tryFill = () => {
+                      const fields = document.querySelectorAll('input, textarea');
+                      let filled = 0;
+                      for (const el of fields) {
+                        const t = (el.type || '').toLowerCase();
+                        if (t === 'submit' || t === 'button' || t === 'checkbox' || t === 'radio' || t === 'file') continue;
+                        const ph = (el.placeholder || '').toLowerCase();
+                        const name = (el.name || '').toLowerCase();
+                        const id = (el.id || '').toLowerCase();
+                        const cls = (el.className || '').toLowerCase();
+                        const lbl = (el.getAttribute('aria-label') || '').toLowerCase();
+                        const blob = ph + ' ' + name + ' ' + id + ' ' + cls + ' ' + lbl;
+                        if (blob.includes('key') || blob.includes('token') || blob.includes('api') || blob.includes('密钥') || blob.includes('密码') || t === 'password') {
+                          console.log('[ChatPlex] Filling field:', el);
+                          setNative(el, key);
+                          filled++;
+                        }
+                      }
+                      return filled;
+                    };
+
+                    const filled = tryFill();
+                    console.log('[ChatPlex] Initial fill count:', filled);
+
+                    const obs = new MutationObserver(() => { tryFill(); });
+                    obs.observe(document.body, { childList: true, subtree: true });
+                    setTimeout(() => obs.disconnect(), 15000);
+                  })();
+                `,
+              }).catch((e) => log(`eval_js failed: ${e}`));
+            };
+            setTimeout(injectScript, 1500);
+            setTimeout(injectScript, 4000);
+          }
         });
 
         newWv.once('tauri://error', (e: unknown) => {
-          console.error(`[ChatPlex] Webview error for ${label}:`, e);
+          const errMsg = e instanceof Error ? e.message : JSON.stringify(e);
+          log(`❌ Webview ERROR for ${label}: ${errMsg}`);
+          errorMessages.set(serviceId, errMsg);
           webviewInstances.delete(serviceId);
           loadedServices.delete(serviceId);
+          loadingServiceId.value = null;
+          if (activeServiceId.value === serviceId) {
+            activeServiceId.value = null;
+          }
         });
 
+        // Optimistically track it
         webviewInstances.set(serviceId, newWv);
         loadedServices.add(serviceId);
+
       } catch (e) {
-        console.error(`[ChatPlex] Failed to create webview for ${serviceId}:`, e);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        log(`❌ Exception creating webview for ${serviceId}: ${errMsg}`);
+        errorMessages.set(serviceId, errMsg);
+        loadingServiceId.value = null;
         return;
       }
     }
 
     activeServiceId.value = serviceId;
+    loadingServiceId.value = null;
+    log(`Active service set to: ${serviceId}`);
   }
 
   async function closeService(serviceId: string) {
+    log(`Closing service: ${serviceId}`);
     const wv = webviewInstances.get(serviceId);
     if (wv) {
-      try {
-        await wv.close();
-      } catch {
-        // already closed
-      }
+      try { await wv.close(); } catch { /* already closed */ }
       webviewInstances.delete(serviceId);
     }
     loadedServices.delete(serviceId);
-
+    errorMessages.delete(serviceId);
     if (activeServiceId.value === serviceId) {
       activeServiceId.value = null;
     }
+  }
+
+  async function refreshService(serviceId: string) {
+    log(`Refreshing service: ${serviceId}`);
+    // For chat-type services, bump the refresh key to trigger re-fetch
+    const service = SERVICES.find(s => s.id === serviceId);
+    if (service?.type === 'chat') {
+      chatRefreshKey.value++;
+      return;
+    }
+    // For webview services: close and reopen
+    const wv = webviewInstances.get(serviceId);
+    if (wv) {
+      try { await wv.close(); } catch { /* already closed */ }
+      webviewInstances.delete(serviceId);
+      loadedServices.delete(serviceId);
+    }
+    if (activeServiceId.value === serviceId) {
+      activeServiceId.value = null;
+    }
+    await openService(serviceId);
   }
 
   async function resizeWebview(wv: Webview) {
@@ -127,13 +290,12 @@ export function useServiceManager() {
       const mainWindow = getCurrentWindow();
       const size = await mainWindow.innerSize();
       const scaleFactor = await mainWindow.scaleFactor();
-      const logicalSize = size.toLogical(scaleFactor);
-      const contentWidth = logicalSize.width - sidebarWidth.value;
-
+      const logical = size.toLogical(scaleFactor);
+      const contentWidth = logical.width - sidebarWidth.value;
       await wv.setPosition(new LogicalPosition(sidebarWidth.value, 0));
-      await wv.setSize(new LogicalSize(contentWidth, logicalSize.height));
+      await wv.setSize(new LogicalSize(contentWidth, logical.height));
     } catch (e) {
-      console.error('[ChatPlex] Failed to resize webview:', e);
+      log(`resizeWebview error: ${e}`);
     }
   }
 
@@ -141,45 +303,67 @@ export function useServiceManager() {
     for (const [serviceId, wv] of webviewInstances.entries()) {
       try {
         await resizeWebview(wv);
-        // Show/hide based on active state
         if (serviceId === activeServiceId.value) {
           await wv.show();
+          await wv.setFocus();
         } else {
           await wv.hide();
         }
       } catch {
-        console.error(`[ChatPlex] Failed to resize webview for ${serviceId}`);
+        log(`resizeAllServices error for ${serviceId}`);
       }
     }
   }
 
   function handleWindowResize() {
-    if (resizeTimeout) {
-      clearTimeout(resizeTimeout);
-    }
-    resizeTimeout = setTimeout(async () => {
-      await resizeAllServices();
-    }, 100);
+    if (resizeTimeout) clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => resizeAllServices(), 100);
   }
 
   function toggleSidebar() {
     sidebarExpanded.value = !sidebarExpanded.value;
-    sidebarWidth.value = sidebarExpanded.value ? 256 : 56;
-    // Resize after CSS transition completes
-    setTimeout(() => {
-      resizeAllServices();
-    }, 300);
+    sidebarWidth.value = sidebarExpanded.value ? 200 : 56;
+    setTimeout(() => resizeAllServices(), 300);
+  }
+
+  function clearError(serviceId: string) {
+    errorMessages.delete(serviceId);
+  }
+
+  function toggleDebug() {
+    showDebug.value = !showDebug.value;
+  }
+
+  function setRegion(region: ServiceRegion) {
+    activeRegion.value = region;
+  }
+
+  function setCategory(category: ServiceCategory) {
+    activeCategory.value = category;
   }
 
   return {
     activeServiceId,
     loadedServices,
+    loadingServiceId,
+    errorMessages,
     sidebarWidth,
     sidebarExpanded,
+    debugLogs,
+    showDebug,
+    activeRegion,
+    activeCategory,
+    filteredServices,
+    chatRefreshKey,
     openService,
     closeService,
+    refreshService,
     resizeAllServices,
     handleWindowResize,
     toggleSidebar,
+    clearError,
+    toggleDebug,
+    setRegion,
+    setCategory,
   };
 }

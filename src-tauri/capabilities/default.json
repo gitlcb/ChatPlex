@@ -22,6 +22,14 @@
     "core:webview:allow-set-webview-background-color",
     "core:webview:allow-get-all-webviews",
     "core:webview:allow-set-webview-auto-resize",
-    "opener:default"
+    "opener:default",
+    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://**" }
+      ]
+    },
+    "window-state:default"
   ]
 }

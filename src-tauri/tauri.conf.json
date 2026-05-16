@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ChatPlex",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.chatplex.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:45678",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "ChatPlex - 国产AI一站式对话",
+        "title": "ChatPlex - AI 一站式对话",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
