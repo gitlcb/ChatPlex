@@ -123,12 +123,7 @@ export function useServiceManager() {
     if (wv) {
       // Show existing webview and resize
       try {
-        await wv.setPosition(new LogicalPosition(sidebarWidth.value, 0));
-        const mainWindow = getCurrentWindow();
-        const size = await mainWindow.innerSize();
-        const scaleFactor = await mainWindow.scaleFactor();
-        const logical = size.toLogical(scaleFactor);
-        await wv.setSize(new LogicalSize(logical.width - sidebarWidth.value - rightSidebarWidth, logical.height));
+        await resizeWebview(wv);
         await wv.show();
         await wv.setFocus();
         log(`Re-showed existing webview: ${label}`);

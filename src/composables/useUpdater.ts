@@ -89,7 +89,15 @@ async function checkForUpdate(opts: { silent?: boolean } = {}): Promise<void> {
     })
     if (!res.ok) {
       status.value = 'error'
-      errorMessage.value = `GitHub API ${res.status}`
+      if (res.status === 404) {
+        errorMessage.value = '暂无可用更新（尚未发布 Release）'
+      } else if (res.status === 403) {
+        errorMessage.value = '请求被拒绝，请稍后重试'
+      } else if (res.status >= 500) {
+        errorMessage.value = 'GitHub 服务器异常，请稍后重试'
+      } else {
+        errorMessage.value = `请求失败 (${res.status})`
+      }
       return
     }
     const data: any = await res.json()
@@ -117,7 +125,14 @@ async function checkForUpdate(opts: { silent?: boolean } = {}): Promise<void> {
     }
   } catch (e) {
     status.value = 'error'
-    errorMessage.value = e instanceof Error ? e.message : String(e)
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
+      errorMessage.value = '网络连接失败，请检查网络后重试'
+    } else if (msg.includes('timeout') || msg.includes('TIMED_OUT')) {
+      errorMessage.value = '请求超时，请检查网络后重试'
+    } else {
+      errorMessage.value = msg || '检查更新失败'
+    }
   }
 }
 

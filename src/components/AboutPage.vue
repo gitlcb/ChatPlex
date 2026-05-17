@@ -6,17 +6,17 @@ import { useServiceManager } from '../composables/useServiceManager'
 import { useUpdater } from '../composables/useUpdater'
 import { SERVICES } from '../types/services'
 
-const version = '0.4.1'
+const version = '0.4.2'
 const store = useAppStore()
 const { loadedServices } = useServiceManager()
-const { status: updateStatus, release, checkForUpdate, openModalIfAvailable, clearSkip } = useUpdater()
+const { status: updateStatus, release, errorMessage: updateError, checkForUpdate, openModalIfAvailable, clearSkip } = useUpdater()
 
 const updateLabel = computed(() => {
   switch (updateStatus.value) {
     case 'checking': return '检查中…'
     case 'available': return `发现新版 v${release.value?.version || ''}`
     case 'latest': return '已是最新版本'
-    case 'error': return '检查失败，重试'
+    case 'error': return updateError.value || '检查失败，重试'
     default: return '检查更新'
   }
 })
