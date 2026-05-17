@@ -1,19 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useAppStore } from '../stores/app'
-import { useServiceManager } from '../composables/useServiceManager'
-import { SERVICES } from '../types/services'
 
 const store = useAppStore()
-const { activeServiceId } = useServiceManager()
 const win = getCurrentWindow()
-
-const activeServiceName = computed(() => {
-  if (!activeServiceId.value) return 'ChatPlex'
-  const svc = SERVICES.find(s => s.id === activeServiceId.value)
-  return svc?.name || 'ChatPlex'
-})
 
 function minimize() { win.minimize() }
 function toggleMaximize() { win.toggleMaximize() }
@@ -24,7 +14,7 @@ function closeToTray() { win.hide() }
   <div class="titlebar" data-tauri-drag-region>
     <div class="tb-left" data-tauri-drag-region>
       <img src="/chatplex-logo.png" class="tb-logo" />
-      <span class="tb-title">{{ activeServiceName }}</span>
+      <span class="tb-title">ChatPlex</span>
     </div>
     <div class="tb-right">
       <button class="tb-btn" @click="store.showSettings = true" title="设置">

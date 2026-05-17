@@ -12,6 +12,9 @@ const loadingServiceId = ref<string | null>(null);
 const errorMessages = reactive<Map<string, string>>(new Map());
 const sidebarWidth = ref(200);
 const sidebarExpanded = ref(true);
+const rightSidebarWidth = 48;
+
+const activeRightPanel = ref<string | null>(null);
 
 // Filter state
 const activeRegion = ref<ServiceRegion>('domestic');
@@ -44,12 +47,17 @@ export function useServiceManager() {
 
     log(`Opening service: ${service.name} (${service.url})`);
 
-    // Clicking same service → just refocus
+    const rightPanelWasOpen = activeRightPanel.value !== null;
+    activeRightPanel.value = null;
+
     if (activeServiceId.value === serviceId) {
       log(`Service ${serviceId} is already active, refocusing`);
       const wv = webviewInstances.get(serviceId);
       if (wv) {
-        try { await wv.setFocus(); } catch (e) { log(`Refocus failed: ${e}`); }
+        try {
+          if (rightPanelWasOpen) await wv.show();
+          await wv.setFocus();
+        } catch (e) { log(`Refocus failed: ${e}`); }
       }
       return;
     }
@@ -120,7 +128,7 @@ export function useServiceManager() {
         const size = await mainWindow.innerSize();
         const scaleFactor = await mainWindow.scaleFactor();
         const logical = size.toLogical(scaleFactor);
-        await wv.setSize(new LogicalSize(logical.width - sidebarWidth.value, logical.height));
+        await wv.setSize(new LogicalSize(logical.width - sidebarWidth.value - rightSidebarWidth, logical.height));
         await wv.show();
         await wv.setFocus();
         log(`Re-showed existing webview: ${label}`);
@@ -140,7 +148,7 @@ export function useServiceManager() {
         const scaleFactor = await mainWindow.scaleFactor();
         const logical = size.toLogical(scaleFactor);
         const titlebarHeight = 36;
-        const contentWidth = logical.width - sidebarWidth.value;
+        const contentWidth = logical.width - sidebarWidth.value - rightSidebarWidth;
         const contentHeight = logical.height - titlebarHeight;
 
         log(`Creating webview "${label}" → ${service.url}`);
@@ -294,7 +302,7 @@ export function useServiceManager() {
       const scaleFactor = await mainWindow.scaleFactor();
       const logical = size.toLogical(scaleFactor);
       const titlebarHeight = 36;
-      const contentWidth = logical.width - sidebarWidth.value;
+      const contentWidth = logical.width - sidebarWidth.value - rightSidebarWidth;
       const contentHeight = logical.height - titlebarHeight;
       await wv.setPosition(new LogicalPosition(sidebarWidth.value, titlebarHeight));
       await wv.setSize(new LogicalSize(contentWidth, contentHeight));
@@ -346,6 +354,36 @@ export function useServiceManager() {
     activeCategory.value = category;
   }
 
+  async function toggleRightPanel(panelId: string) {
+    if (activeRightPanel.value === panelId) {
+      activeRightPanel.value = null;
+      if (activeServiceId.value) {
+        const wv = webviewInstances.get(activeServiceId.value);
+        if (wv) {
+          try { await wv.show(); await wv.setFocus(); } catch { /* ok */ }
+        }
+      }
+    } else {
+      activeRightPanel.value = panelId;
+      if (activeServiceId.value) {
+        const wv = webviewInstances.get(activeServiceId.value);
+        if (wv) { try { await wv.hide(); } catch { /* ok */ } }
+      }
+    }
+  }
+
+  async function hideActiveWebview() {
+    if (!activeServiceId.value) return;
+    const wv = webviewInstances.get(activeServiceId.value);
+    if (wv) { try { await wv.hide(); } catch { /* ok */ } }
+  }
+
+  async function showActiveWebview() {
+    if (!activeServiceId.value || activeRightPanel.value) return;
+    const wv = webviewInstances.get(activeServiceId.value);
+    if (wv) { try { await wv.show(); await wv.setFocus(); } catch { /* ok */ } }
+  }
+
   return {
     activeServiceId,
     loadedServices,
@@ -353,6 +391,7 @@ export function useServiceManager() {
     errorMessages,
     sidebarWidth,
     sidebarExpanded,
+    activeRightPanel,
     debugLogs,
     showDebug,
     activeRegion,
@@ -365,6 +404,9 @@ export function useServiceManager() {
     resizeAllServices,
     handleWindowResize,
     toggleSidebar,
+    toggleRightPanel,
+    hideActiveWebview,
+    showActiveWebview,
     clearError,
     toggleDebug,
     setRegion,

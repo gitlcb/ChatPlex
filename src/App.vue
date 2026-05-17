@@ -1,22 +1,40 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
+import RightSidebar from './components/RightSidebar.vue'
 import WelcomeScreen from './components/WelcomeScreen.vue'
 import FreeChat from './components/FreeChat.vue'
 import FreeDraw from './components/FreeDraw.vue'
+import AboutPage from './components/AboutPage.vue'
+import EntertainmentPage from './components/EntertainmentPage.vue'
+import VibeCodingPage from './components/VibeCodingPage.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { useServiceManager } from './composables/useServiceManager'
 import { useAppStore } from './stores/app'
 import { SERVICES } from './types/services'
 import { listen } from '@tauri-apps/api/event'
 
-const { activeServiceId, loadingServiceId, debugLogs, showDebug, handleWindowResize } = useServiceManager()
+const {
+  activeServiceId,
+  loadingServiceId,
+  activeRightPanel,
+  debugLogs,
+  showDebug,
+  handleWindowResize,
+  hideActiveWebview,
+  showActiveWebview,
+} = useServiceManager()
 const store = useAppStore()
 
 const activeService = computed(() => activeServiceId.value ? SERVICES.find(s => s.id === activeServiceId.value) : null)
 const activeIsChat = computed(() => activeService.value?.type === 'chat')
 const activeIsVisual = computed(() => activeService.value?.type === 'visual' && activeService.value?.id === 'free-draw')
+
+watch(() => store.showSettings, async (open) => {
+  if (open) await hideActiveWebview()
+  else await showActiveWebview()
+})
 
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
@@ -59,21 +77,30 @@ onUnmounted(() => {
     <div class="app-body">
       <Sidebar />
       <main class="content-area">
-        <WelcomeScreen v-if="!activeServiceId && !loadingServiceId" />
+        <!-- Right panel pages -->
+        <AboutPage v-if="activeRightPanel === 'about'" />
+        <EntertainmentPage v-else-if="activeRightPanel === 'entertainment'" />
+        <VibeCodingPage v-else-if="activeRightPanel === 'vibe-coding'" />
 
-        <div v-if="loadingServiceId && !activeServiceId" class="loading-overlay">
-          <div class="loading-spinner-large">
-            <svg class="spinner-large" width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.2"/>
-              <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-            </svg>
+        <!-- Normal content (hidden when right panel is active) -->
+        <template v-if="!activeRightPanel">
+          <WelcomeScreen v-if="!activeServiceId && !loadingServiceId" />
+
+          <div v-if="loadingServiceId && !activeServiceId" class="loading-overlay">
+            <div class="loading-spinner-large">
+              <svg class="spinner-large" width="40" height="40" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <p class="loading-text">正在加载服务...</p>
           </div>
-          <p class="loading-text">正在加载服务...</p>
-        </div>
 
-        <FreeChat v-if="activeServiceId && activeIsChat" />
-        <FreeDraw v-else-if="activeServiceId && activeIsVisual" />
+          <FreeChat v-if="activeServiceId && activeIsChat" />
+          <FreeDraw v-else-if="activeServiceId && activeIsVisual" />
+        </template>
       </main>
+      <RightSidebar />
     </div>
 
     <!-- Settings Modal -->

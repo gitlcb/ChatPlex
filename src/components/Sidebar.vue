@@ -11,6 +11,7 @@ const {
   errorMessages,
   toggleSidebar,
   sidebarExpanded,
+  activeRightPanel,
   openService,
   closeService,
   refreshService,
@@ -86,14 +87,17 @@ function handleServiceClose(serviceId: string) {
 <template>
   <aside class="sidebar" :class="{ collapsed: !sidebarExpanded }">
     <!-- Header / Logo -->
-    <div class="sidebar-header" @click="sidebarExpanded || toggleSidebar()">
-      <div class="logo-icon" @click.stop="!sidebarExpanded && toggleSidebar()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-        </svg>
-      </div>
+    <div class="sidebar-header" @click="toggleSidebar()">
       <transition name="fade-width">
         <span v-if="sidebarExpanded" class="logo-text">ChatPlex</span>
+      </transition>
+      <transition name="fade-scale">
+        <span v-if="!sidebarExpanded" class="expand-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 3l4 5-4 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+          </svg>
+        </span>
       </transition>
       <button
         v-if="sidebarExpanded"
@@ -107,16 +111,6 @@ function handleServiceClose(serviceId: string) {
       </button>
     </div>
 
-    <!-- Expand button when collapsed -->
-    <div v-if="!sidebarExpanded" class="collapsed-actions">
-      <button class="expand-btn" @click="toggleSidebar" title="展开侧栏">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M7 3L3 8l4 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M12 3L8 8l4 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
-        </svg>
-      </button>
-    </div>
-
     <!-- Service List -->
     <nav class="service-list">
       <button
@@ -124,7 +118,7 @@ function handleServiceClose(serviceId: string) {
         :key="service.id"
         class="service-btn"
         :class="{
-          active: activeServiceId === service.id,
+          active: activeServiceId === service.id && !activeRightPanel,
           loading: loadingServiceId === service.id,
           'has-error': errorMessages.has(service.id),
         }"
@@ -137,7 +131,7 @@ function handleServiceClose(serviceId: string) {
         <!-- Active indicator line -->
         <div
           class="service-indicator"
-          :class="{ visible: activeServiceId === service.id }"
+          :class="{ visible: activeServiceId === service.id && !activeRightPanel }"
           :style="{ '--service-color': service.color }"
         ></div>
 
@@ -180,8 +174,8 @@ function handleServiceClose(serviceId: string) {
       </div>
     </div>
 
-    <!-- Footer -->
-    <div class="sidebar-footer" v-if="sidebarExpanded">
+    <!-- Footer — Segmented Control -->
+    <div class="sidebar-footer" v-show="sidebarExpanded">
       <div class="seg-group">
         <div class="seg-track">
           <div class="seg-indicator" :style="categoryIndicatorStyle"></div>
@@ -253,12 +247,13 @@ function handleServiceClose(serviceId: string) {
   border-right: 1px solid #1a2435;
   display: flex;
   flex-direction: column;
-  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
   user-select: none;
   flex-shrink: 0;
   position: relative;
   z-index: 100;
+  will-change: width;
 }
 
 .sidebar.collapsed {
@@ -273,23 +268,8 @@ function handleServiceClose(serviceId: string) {
   border-bottom: 1px solid #1a2435;
   min-height: 52px;
   flex-shrink: 0;
-}
-
-.logo-icon {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border-radius: 8px;
-  flex-shrink: 0;
-  color: white;
   cursor: pointer;
-  transition: transform 0.2s;
 }
-
-.logo-icon:hover { transform: scale(1.05); }
 
 .logo-text {
   font-size: 17px;
@@ -317,20 +297,15 @@ function handleServiceClose(serviceId: string) {
 }
 .sidebar-toggle:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); }
 
-.collapsed-actions {
-  padding: 8px 10px;
-  border-bottom: 1px solid #1a2435;
+.expand-icon {
   display: flex;
+  align-items: center;
   justify-content: center;
+  color: #64748b;
+  transition: color 0.18s;
+  flex-shrink: 0;
 }
-
-.expand-btn {
-  width: 36px; height: 36px;
-  display: flex; align-items: center; justify-content: center;
-  background: none; border: 1px solid #1a2435; border-radius: 8px;
-  color: #64748b; cursor: pointer; transition: all 0.2s;
-}
-.expand-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); border-color: #2a3a4a; }
+.sidebar-header:hover .expand-icon { color: #e2e8f0; }
 
 /* Service List */
 .service-list {
@@ -398,6 +373,18 @@ function handleServiceClose(serviceId: string) {
 .sidebar-footer {
   padding: 10px 10px 14px; border-top: 1px solid #1a2435;
   flex-shrink: 0; display: flex; flex-direction: column; gap: 6px;
+  overflow: hidden;
+  transition: opacity 0.22s ease, max-height 0.35s cubic-bezier(0.32,0.72,0,1), padding 0.35s cubic-bezier(0.32,0.72,0,1), border-color 0.35s;
+  max-height: 200px;
+  opacity: 1;
+}
+.sidebar.collapsed .sidebar-footer {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent;
+  pointer-events: none;
 }
 .seg-group { display: flex; }
 .seg-track {
@@ -457,10 +444,15 @@ function handleServiceClose(serviceId: string) {
 .sidebar.collapsed .service-btn { justify-content: center; padding: 10px 8px; }
 .sidebar.collapsed .sidebar-header { justify-content: center; padding: 12px 8px; }
 
-/* Transitions */
-.fade-width-enter-active, .fade-width-leave-active { transition: opacity 0.2s, transform 0.2s; }
-.fade-width-enter-from { opacity: 0; transform: translateX(-8px); }
-.fade-width-leave-to { opacity: 0; transform: translateX(-8px); }
+/* Transitions — staggered: text fades before sidebar shrinks */
+.fade-width-enter-active {
+  transition: opacity 0.22s ease 0.06s, transform 0.22s ease 0.06s;
+}
+.fade-width-leave-active {
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.fade-width-enter-from { opacity: 0; transform: translateX(-6px); }
+.fade-width-leave-to   { opacity: 0; transform: translateX(-6px); }
 .fade-scale-enter-active, .fade-scale-leave-active { transition: opacity 0.12s, transform 0.12s; }
 .fade-scale-enter-from { opacity: 0; transform: scale(0.8); }
 .fade-scale-leave-to { opacity: 0; transform: scale(0.8); }

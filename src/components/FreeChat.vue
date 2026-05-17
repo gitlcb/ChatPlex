@@ -17,6 +17,7 @@ const { chatRefreshKey } = useServiceManager()
 const input = ref('')
 const imagePreview = ref('')
 const messagesEnd = ref<HTMLDivElement>()
+const chatScroll = ref<HTMLDivElement>()
 const fileInput = ref<HTMLInputElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
 const editingSessionId = ref<string | null>(null)
@@ -34,6 +35,24 @@ const searchHighlight = computed(() => store.showSearch ? store.searchQuery : ''
 
 /* ===== Helpers ===== */
 function scrollToBottom() { nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' })) }
+function scrollToBottomInstant() {
+  nextTick(() => {
+    const el = chatScroll.value
+    if (!el) return
+    const prev = el.style.scrollBehavior
+    el.style.scrollBehavior = 'auto'
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      if (!chatScroll.value) return
+      chatScroll.value.scrollTop = chatScroll.value.scrollHeight
+      requestAnimationFrame(() => {
+        if (!chatScroll.value) return
+        chatScroll.value.scrollTop = chatScroll.value.scrollHeight
+        chatScroll.value.style.scrollBehavior = prev
+      })
+    })
+  })
+}
 function autoResize() {
   const el = textareaRef.value
   if (!el) return
@@ -265,7 +284,7 @@ function onKeydown(e: KeyboardEvent) {
 
 /* ===== Lifecycle ===== */
 watch(chatRefreshKey, () => { store.resetChat(); fetchModels() })
-onMounted(() => { store.loadSessions(); fetchModels() })
+onMounted(() => { store.loadSessions(); fetchModels(); scrollToBottomInstant() })
 </script>
 
 <template>
@@ -340,7 +359,7 @@ onMounted(() => { store.loadSessions(); fetchModels() })
               </div>
             </div>
           </div>
-          <div class="chat-scroll">
+          <div class="chat-scroll" ref="chatScroll">
             <div class="chat-msgs">
               <div v-for="(msg, i) in store.messages" :key="i"
                 class="msg-row" :class="msg.role"
@@ -483,7 +502,7 @@ onMounted(() => { store.loadSessions(); fetchModels() })
 .msg-img { max-width: 300px; max-height: 220px; border-radius: 10px; object-fit: cover; margin-bottom: 6px; }
 
 .cm-text { font-size: 14px; line-height: 1.75; word-break: break-word; }
-.msg-row.user .cm-text { background: var(--bg-chat-user, #1e3a5f); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 70%; }
+.msg-row.user .cm-text { background: var(--chat-user, #e3f2fd); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 70%; }
 .msg-row.assistant .cm-text { padding: 4px 0; }
 .cm-text.is-streaming::after { content: ''; display: inline-block; width: 2px; height: 16px; background: #60a5fa; margin-left: 2px; animation: blink 0.8s infinite; vertical-align: text-bottom; }
 @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
