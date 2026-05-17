@@ -3,11 +3,32 @@ import { computed } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { useAppStore } from '../stores/app'
 import { useServiceManager } from '../composables/useServiceManager'
+import { useUpdater } from '../composables/useUpdater'
 import { SERVICES } from '../types/services'
 
-const version = '0.4.0'
+const version = '0.4.1'
 const store = useAppStore()
 const { loadedServices } = useServiceManager()
+const { status: updateStatus, release, checkForUpdate, openModalIfAvailable, clearSkip } = useUpdater()
+
+const updateLabel = computed(() => {
+  switch (updateStatus.value) {
+    case 'checking': return '检查中…'
+    case 'available': return `发现新版 v${release.value?.version || ''}`
+    case 'latest': return '已是最新版本'
+    case 'error': return '检查失败，重试'
+    default: return '检查更新'
+  }
+})
+
+function handleCheckUpdate() {
+  if (updateStatus.value === 'available') {
+    clearSkip()
+    openModalIfAvailable()
+  } else {
+    checkForUpdate({ silent: false })
+  }
+}
 
 const stats = computed(() => {
   const sessions = store.sessions
@@ -101,6 +122,18 @@ const features = [
           <button class="btn-ghost" @click="openExternal('https://github.com/gitlcb/ChatPlex/releases')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             发行版本
+          </button>
+          <button
+            class="btn-ghost"
+            :class="{ 'has-update': updateStatus === 'available' }"
+            :disabled="updateStatus === 'checking'"
+            @click="handleCheckUpdate"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="{ spinning: updateStatus === 'checking' }">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            {{ updateLabel }}
           </button>
         </div>
       </section>
@@ -345,6 +378,15 @@ const features = [
   color: var(--text-secondary, #94a3b8);
 }
 .btn-ghost:hover { border-color: #3b82f6; color: var(--text-primary, #e2e8f0); }
+.btn-ghost:disabled { opacity: 0.6; cursor: wait; }
+.btn-ghost.has-update {
+  border-color: rgba(99,102,241,0.5);
+  color: #a5b4fc;
+  background: rgba(99,102,241,0.08);
+}
+.btn-ghost.has-update:hover { border-color: #8b5cf6; }
+.btn-ghost svg.spinning { animation: btn-spin 1s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 
 /* Sections */
 .grid-section { margin-bottom: 28px; }

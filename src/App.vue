@@ -10,8 +10,10 @@ import AboutPage from './components/AboutPage.vue'
 import EntertainmentPage from './components/EntertainmentPage.vue'
 import VibeCodingPage from './components/VibeCodingPage.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import UpdateModal from './components/UpdateModal.vue'
 import { useServiceManager } from './composables/useServiceManager'
 import { useAppStore } from './stores/app'
+import { useUpdater } from './composables/useUpdater'
 import { SERVICES } from './types/services'
 import { listen } from '@tauri-apps/api/event'
 
@@ -26,6 +28,7 @@ const {
   showActiveWebview,
 } = useServiceManager()
 const store = useAppStore()
+const { checkForUpdate } = useUpdater()
 
 const activeService = computed(() => activeServiceId.value ? SERVICES.find(s => s.id === activeServiceId.value) : null)
 const activeIsChat = computed(() => activeService.value?.type === 'chat')
@@ -39,6 +42,8 @@ watch(() => store.showSettings, async (open) => {
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
   store.loadSettings()
+
+  setTimeout(() => { checkForUpdate({ silent: true }) }, 3000)
 
   // Global keyboard shortcuts (frontend fallback)
   window.addEventListener('keydown', (e) => {
@@ -105,6 +110,7 @@ onUnmounted(() => {
 
     <!-- Settings Modal -->
     <SettingsModal />
+    <UpdateModal />
 
     <!-- Debug Log Panel -->
     <div v-if="showDebug" class="debug-panel">
