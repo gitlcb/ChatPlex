@@ -3,7 +3,8 @@ import { Webview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { invoke } from '@tauri-apps/api/core';
-import { SERVICES, type ServiceRegion, type ServiceCategory } from '../types/services';
+import { SERVICES, type ServiceRegion, type ServiceCategory, type AIService } from '../types/services';
+import { useAppStore } from '../stores/app';
 
 // ========== Singleton State ==========
 const activeServiceId = ref<string | null>(null);
@@ -19,9 +20,16 @@ const activeRightPanel = ref<string | null>(null);
 // Filter state
 const activeRegion = ref<ServiceRegion>('domestic');
 const activeCategory = ref<ServiceCategory>('chat');
-const filteredServices = computed(() =>
-  SERVICES.filter(s => s.region === activeRegion.value && s.category === activeCategory.value)
-);
+const filteredServices = computed(() => {
+  const store = useAppStore()
+  const all = [...SERVICES, ...store.customServices] as AIService[]
+  return all.filter(s => {
+    if (s.region !== activeRegion.value || s.category !== activeCategory.value) return false
+    const isBuiltIn = SERVICES.some(bi => bi.id === s.id)
+    if (isBuiltIn) return !store.hiddenServiceIds.includes(s.id)
+    return !s.hidden
+  })
+});
 
 // Debug logs — visible in UI for troubleshooting
 const debugLogs = reactive<string[]>([]);
@@ -42,7 +50,9 @@ let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function useServiceManager() {
   async function openService(serviceId: string) {
-    const service = SERVICES.find((s) => s.id === serviceId);
+    const store = useAppStore()
+    const service = SERVICES.find((s) => s.id === serviceId)
+      || store.customServices.find((s: AIService) => s.id === serviceId);
     if (!service) return;
 
     log(`Opening service: ${service.name} (${service.url})`);
@@ -272,7 +282,9 @@ export function useServiceManager() {
   async function refreshService(serviceId: string) {
     log(`Refreshing service: ${serviceId}`);
     // For chat-type services, bump the refresh key to trigger re-fetch
-    const service = SERVICES.find(s => s.id === serviceId);
+    const store = useAppStore()
+    const service = SERVICES.find(s => s.id === serviceId)
+      || store.customServices.find(s => s.id === serviceId);
     if (service?.type === 'chat') {
       chatRefreshKey.value++;
       return;

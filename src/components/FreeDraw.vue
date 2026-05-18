@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useAppStore } from '../stores/app'
-
-const store = useAppStore()
+import { DEFAULT_API_URL, DEFAULT_API_KEY } from '../stores/app'
 
 const prompt = ref('')
 const size = ref('1024x1024')
@@ -10,8 +8,8 @@ const loading = ref(false)
 const imageUrl = ref('')
 const error = ref('')
 
-const API_URL = store.effectiveApiUrl
-const API_KEY = store.effectiveApiKey
+const API_URL = DEFAULT_API_URL
+const API_KEY = DEFAULT_API_KEY
 
 async function generate() {
   if (!prompt.value.trim() || loading.value) return

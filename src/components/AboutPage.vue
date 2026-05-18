@@ -6,7 +6,7 @@ import { useServiceManager } from '../composables/useServiceManager'
 import { useUpdater } from '../composables/useUpdater'
 import { SERVICES } from '../types/services'
 
-const version = '0.4.2'
+const version = '0.4.3'
 const store = useAppStore()
 const { loadedServices } = useServiceManager()
 const { status: updateStatus, release, errorMessage: updateError, checkForUpdate, openModalIfAvailable, clearSkip } = useUpdater()

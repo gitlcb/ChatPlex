@@ -1,6 +1,7 @@
 export type ServiceRegion = 'domestic' | 'international';
 export type ServiceCategory = 'chat' | 'visual';
 export type ServiceType = 'webview' | 'chat' | 'visual';
+export type ApiType = 'openai' | 'anthropic';
 
 export interface AIService {
   id: string;
@@ -12,7 +13,26 @@ export interface AIService {
   region: ServiceRegion;
   category: ServiceCategory;
   type?: ServiceType;
+  hidden?: boolean;
 }
+
+export interface CustomModel {
+  name: string;
+  type: 'chat' | 'chatimages';
+}
+
+export interface CustomService extends AIService {
+  customIcon?: string;
+  apiType?: ApiType;
+  apiBaseUrl?: string;
+  apiKey?: string;
+  models?: CustomModel[];
+}
+
+export const PALETTE = [
+  '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+  '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4',
+];
 
 export const SERVICES: AIService[] = [
   {
@@ -102,6 +122,16 @@ export const SERVICES: AIService[] = [
     icon: '🏔️',
     color: '#06B6D4',
     description: '百川大模型',
+    region: 'domestic',
+    category: 'chat',
+  },
+  {
+    id: 'mimo',
+    name: 'MiMo',
+    url: 'https://aistudio.xiaomimimo.com',
+    icon: '🏁',
+    color: '#FF6900',
+    description: '小米 MiMo',
     region: 'domestic',
     category: 'chat',
   },

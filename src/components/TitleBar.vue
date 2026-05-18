@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { useAppStore } from '../stores/app'
+import { useServiceManager } from '../composables/useServiceManager'
 
-const store = useAppStore()
+const { activeRightPanel, toggleRightPanel } = useServiceManager()
 const win = getCurrentWindow()
 
 function minimize() { win.minimize() }
@@ -17,7 +17,7 @@ function closeToTray() { win.hide() }
       <span class="tb-title">ChatPlex</span>
     </div>
     <div class="tb-right">
-      <button class="tb-btn" @click="store.showSettings = true" title="设置">
+      <button class="tb-btn" :class="{ active: activeRightPanel === 'settings' }" @click="toggleRightPanel('settings')" title="设置">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
       <button class="tb-btn tb-min" @click="minimize" title="最小化">
@@ -51,5 +51,6 @@ function closeToTray() { win.hide() }
   transition: all 0.15s; border-radius: 6px;
 }
 .tb-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary, #e2e8f0); }
+.tb-btn.active { color: var(--accent, #3b82f6); background: rgba(59,130,246,0.1); }
 .tb-close:hover { background: #ef4444; color: white; }
 </style>

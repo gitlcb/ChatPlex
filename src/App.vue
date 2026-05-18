@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, watch } from 'vue'
+import { onMounted, onUnmounted, computed } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import RightSidebar from './components/RightSidebar.vue'
@@ -9,7 +9,7 @@ import FreeDraw from './components/FreeDraw.vue'
 import AboutPage from './components/AboutPage.vue'
 import EntertainmentPage from './components/EntertainmentPage.vue'
 import VibeCodingPage from './components/VibeCodingPage.vue'
-import SettingsModal from './components/SettingsModal.vue'
+import SettingsPage from './components/SettingsPage.vue'
 import UpdateModal from './components/UpdateModal.vue'
 import { useServiceManager } from './composables/useServiceManager'
 import { useAppStore } from './stores/app'
@@ -24,20 +24,18 @@ const {
   debugLogs,
   showDebug,
   handleWindowResize,
-  hideActiveWebview,
-  showActiveWebview,
+  toggleRightPanel,
 } = useServiceManager()
 const store = useAppStore()
 const { checkForUpdate } = useUpdater()
 
-const activeService = computed(() => activeServiceId.value ? SERVICES.find(s => s.id === activeServiceId.value) : null)
+function findService(id: string) {
+  return SERVICES.find(s => s.id === id) || store.customServices.find(s => s.id === id)
+}
+
+const activeService = computed(() => activeServiceId.value ? findService(activeServiceId.value) : null)
 const activeIsChat = computed(() => activeService.value?.type === 'chat')
 const activeIsVisual = computed(() => activeService.value?.type === 'visual' && activeService.value?.id === 'free-draw')
-
-watch(() => store.showSettings, async (open) => {
-  if (open) await hideActiveWebview()
-  else await showActiveWebview()
-})
 
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
@@ -53,7 +51,7 @@ onMounted(() => {
     }
     if (e.ctrlKey && e.key === ',') {
       e.preventDefault()
-      store.showSettings = true
+      toggleRightPanel('settings')
     }
     if (e.ctrlKey && e.key === 'n' && store.activeSessionId) {
       e.preventDefault()
@@ -66,7 +64,7 @@ onMounted(() => {
     switch (event.payload) {
       case 'N': store.createNewSession(); break
       case '/': /* focus input */ break
-      case ',': store.showSettings = true; break
+      case ',': toggleRightPanel('settings'); break
     }
   })
 })
@@ -83,7 +81,8 @@ onUnmounted(() => {
       <Sidebar />
       <main class="content-area">
         <!-- Right panel pages -->
-        <AboutPage v-if="activeRightPanel === 'about'" />
+        <SettingsPage v-if="activeRightPanel === 'settings'" />
+        <AboutPage v-else-if="activeRightPanel === 'about'" />
         <EntertainmentPage v-else-if="activeRightPanel === 'entertainment'" />
         <VibeCodingPage v-else-if="activeRightPanel === 'vibe-coding'" />
 
@@ -108,8 +107,7 @@ onUnmounted(() => {
       <RightSidebar />
     </div>
 
-    <!-- Settings Modal -->
-    <SettingsModal />
+    <!-- Update Modal -->
     <UpdateModal />
 
     <!-- Debug Log Panel -->

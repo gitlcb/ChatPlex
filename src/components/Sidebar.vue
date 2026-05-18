@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useServiceManager } from '../composables/useServiceManager';
+import { useAppStore } from '../stores/app';
 import { SERVICES } from '../types/services';
 import type { ServiceRegion, ServiceCategory } from '../types/services';
 
@@ -22,6 +23,8 @@ const {
   setRegion,
   setCategory,
 } = useServiceManager();
+
+const store = useAppStore();
 
 const hoveredService = ref<string | null>(null);
 
@@ -71,7 +74,9 @@ const regionIndicatorStyle = computed(() => {
 });
 
 function getServiceName(serviceId: string): string {
-  return SERVICES.find(s => s.id === serviceId)?.name ?? serviceId;
+  return SERVICES.find(s => s.id === serviceId)?.name
+    ?? store.customServices.find(s => s.id === serviceId)?.name
+    ?? serviceId;
 }
 
 function handleServiceClick(serviceId: string) {
@@ -142,6 +147,8 @@ function handleServiceClose(serviceId: string) {
             <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </span>
+        <img v-else-if="(service as any).customIcon" :src="(service as any).customIcon" class="service-icon custom-icon-img" />
+        <span v-else-if="service.id.startsWith('custom_')" class="service-icon first-char-icon" :style="{ '--fc-bg': service.color }">{{ service.name[0] }}</span>
         <span v-else class="service-icon">{{ service.icon }}</span>
 
         <transition name="fade-width">
@@ -341,6 +348,15 @@ function handleServiceClose(serviceId: string) {
 .loading-spinner { display: flex; align-items: center; justify-content: center; }
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.custom-icon-img { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; }
+.first-char-icon {
+  font-size: 11px; font-weight: 700; color: #fff;
+  width: 22px; height: 22px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fc-bg, #3b82f6);
+  line-height: 1;
+}
 
 .service-info {
   display: flex; align-items: center; gap: 6px;

@@ -3,16 +3,17 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { useAppStore } from '../stores/app'
+import { useAppStore, DEFAULT_API_KEY, DEFAULT_API_URL } from '../stores/app'
 import { useServiceManager } from '../composables/useServiceManager'
 import { getModelType } from '../utils/modelCapabilities'
 import type { ChatMessage } from '../stores/app'
+import type { CustomService, ApiType } from '../types/services'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import MessageActions from './MessageActions.vue'
 import SearchBar from './SearchBar.vue'
 
 const store = useAppStore()
-const { chatRefreshKey } = useServiceManager()
+const { chatRefreshKey, activeServiceId } = useServiceManager()
 
 const input = ref('')
 const imagePreview = ref('')
@@ -32,6 +33,20 @@ const isDragging = ref(false)
 
 /* ===== Computed ===== */
 const searchHighlight = computed(() => store.showSearch ? store.searchQuery : '')
+
+const activeApiConfig = computed(() => {
+  if (!activeServiceId.value) {
+    return { url: DEFAULT_API_URL, apiKey: DEFAULT_API_KEY, apiType: 'openai' as ApiType }
+  }
+  if (activeServiceId.value === 'free-chat') {
+    return { url: DEFAULT_API_URL, apiKey: DEFAULT_API_KEY, apiType: 'openai' as ApiType }
+  }
+  const svc = store.customServices.find(s => s.id === activeServiceId.value) as CustomService | undefined
+  if (svc?.apiBaseUrl && svc?.apiType) {
+    return { url: svc.apiBaseUrl, apiKey: svc.apiKey || '', apiType: svc.apiType }
+  }
+  return { url: DEFAULT_API_URL, apiKey: DEFAULT_API_KEY, apiType: 'openai' as ApiType }
+})
 
 /* ===== Helpers ===== */
 function scrollToBottom() { nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' })) }
@@ -61,19 +76,53 @@ function autoResize() {
 }
 
 /* ===== Models ===== */
+function getCustomAIService(): CustomService | undefined {
+  if (!activeServiceId.value) return undefined
+  const svc = store.customServices.find(s => s.id === activeServiceId.value) as CustomService | undefined
+  return svc?.apiType ? svc : undefined
+}
+
 async function fetchModels() {
+  // If active service is a custom AI with predefined models, use those
+  const customAI = getCustomAIService()
+  if (customAI?.models?.length) {
+    store.modelList = customAI.models.map(m => ({ name: m.name, type: m.type }))
+    if (!store.selectedModel) store.selectedModel = store.modelList[0]?.name || ''
+    store.configError = ''
+    return
+  }
+
   try {
-    const res = await tauriFetch(`${store.effectiveApiUrl}/models`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${store.effectiveApiKey}` },
-    })
-    const data = await res.json()
-    if (data.data?.length) {
-      store.modelList = data.data.map((m: any) => ({ name: m.id, type: getModelType(m.id) }))
-      if (!store.selectedModel) store.selectedModel = store.modelList[0]?.name || ''
-    } else {
-      store.configError = '未获取到可用模型'
+    const cfg = activeApiConfig.value
+    if (cfg.apiType === 'anthropic') {
+      store.configError = 'Anthropic 不支持自动获取模型，请手动添加'
+      return
     }
+    // Build models URL: try /v1/models first, fallback to /models
+    const base = cfg.url.replace(/\/+$/, '')
+    const urls = base.includes('/v1')
+      ? [`${base}/models`]
+      : [`${base}/v1/models`, `${base}/models`]
+
+    let lastError = ''
+    for (const modelsUrl of urls) {
+      try {
+        const res = await tauriFetch(modelsUrl, {
+          method: 'GET',
+          headers: cfg.apiKey ? { 'Authorization': `Bearer ${cfg.apiKey}` } : {},
+        })
+        if (!res.ok) { lastError = `HTTP ${res.status}`; continue }
+        const data = await res.json()
+        if (data.data?.length) {
+          store.modelList = data.data.map((m: any) => ({ name: m.id, type: getModelType(m.id) }))
+          if (!store.selectedModel) store.selectedModel = store.modelList[0]?.name || ''
+          store.configError = ''
+          return
+        }
+        lastError = '响应中没有模型列表'
+      } catch { continue }
+    }
+    store.configError = `未获取到可用模型 (${lastError})`
   } catch (e) {
     store.configError = '加载模型列表失败: ' + (e instanceof Error ? e.message : String(e))
   }
@@ -81,13 +130,18 @@ async function fetchModels() {
 
 /* ===== Session Management ===== */
 function createNewSession() {
-  store.createNewSession()
+  store.createNewSession(activeServiceId.value || undefined)
 }
 
 function switchSession(id: string) {
   store.switchSession(id)
   if (store.activeSession) store.selectedModel = store.activeSession.model
 }
+
+const serviceSessions = computed(() => {
+  if (!activeServiceId.value) return []
+  return store.getSortedServiceSessions(activeServiceId.value)
+})
 
 function deleteSession(id: string) { store.deleteSession(id) }
 
@@ -111,7 +165,7 @@ async function sendMessage() {
   const text = input.value.trim()
   if ((!text && !imagePreview.value) || store.loading) return
 
-  if (!store.activeSession) store.createNewSession()
+  if (!store.activeSession) store.createNewSession(activeServiceId.value || undefined)
   const session = store.activeSession!
   const sessionId = session.id
 
@@ -156,7 +210,8 @@ async function sendMessage() {
     })
     const unlistenDone = await listen<{ done: boolean }>('chat-stream-done', () => { unlistenChunk(); unlistenDone() })
 
-    await invoke('chat_stream', { req: { url: store.effectiveApiUrl, api_key: store.effectiveApiKey, model: store.selectedModel, messages: apiMessages } })
+    const cfg = activeApiConfig.value
+    await invoke('chat_stream', { req: { url: cfg.url, api_key: cfg.apiKey, model: store.selectedModel, messages: apiMessages, api_type: cfg.apiType } })
     unlistenChunk(); unlistenDone()
     if (chunkCount === 0 && !assistantMsg.reasoning) assistantMsg.content = '抱歉，未收到回复内容。'
   } catch (e) {
@@ -284,7 +339,21 @@ function onKeydown(e: KeyboardEvent) {
 
 /* ===== Lifecycle ===== */
 watch(chatRefreshKey, () => { store.resetChat(); fetchModels() })
-onMounted(() => { store.loadSessions(); fetchModels(); scrollToBottomInstant() })
+watch(activeServiceId, (newId, oldId) => {
+  // Save current service state before switching
+  if (oldId) store.saveServiceState(oldId)
+  store.resetChat()
+  // Restore new service state
+  if (newId) store.restoreServiceState(newId)
+  fetchModels()
+})
+onMounted(() => {
+  store.loadSessions()
+  // Restore initial service state
+  if (activeServiceId.value) store.restoreServiceState(activeServiceId.value)
+  fetchModels()
+  scrollToBottomInstant()
+})
 </script>
 
 <template>
@@ -299,7 +368,7 @@ onMounted(() => { store.loadSessions(); fetchModels(); scrollToBottomInstant() }
           新对话
         </button>
         <div class="conv-list">
-          <div v-for="s in store.sortedSessions" :key="s.id"
+          <div v-for="s in serviceSessions" :key="s.id"
             class="conv-item" :class="{ active: s.id === store.activeSessionId }"
             @click="switchSession(s.id)"
             @mouseenter="hoverSessionId = s.id" @mouseleave="hoverSessionId = null"
