@@ -13,7 +13,7 @@ const loadingServiceId = ref<string | null>(null);
 const errorMessages = reactive<Map<string, string>>(new Map());
 const sidebarWidth = ref(200);
 const sidebarExpanded = ref(true);
-const rightSidebarWidth = 48;
+const rightSidebarWidth = 65;
 
 const activeRightPanel = ref<string | null>(null);
 

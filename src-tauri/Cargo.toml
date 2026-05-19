@@ -1,6 +1,6 @@
 [package]
 name = "chatplex"
-version = "0.4.3"
+version = "0.4.4"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -32,4 +32,5 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2.5.1"
 

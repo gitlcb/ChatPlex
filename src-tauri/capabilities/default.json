@@ -38,6 +38,9 @@
         { "url": "https://**" }
       ]
     },
+    "fs:default",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file",
     "window-state:default",
     "global-shortcut:default",
     "store:default",

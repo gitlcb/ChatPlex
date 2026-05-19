@@ -282,19 +282,30 @@ function handleRemove(msgIdx: number) {
   store.persistSessions()
 }
 
+import { save } from '@tauri-apps/plugin-dialog'
+import { writeTextFile } from '@tauri-apps/plugin-fs'
+
 // Export functions available via toolbar buttons
-function exportAsMarkdown() {
+async function exportAsMarkdown() {
   if (!store.activeSession) return
   const s = store.activeSession
   let md = `# ${s.title}\n\n`
   for (const msg of s.messages) {
     md += `## ${msg.role === 'user' ? 'You' : 'AI'}\n\n${msg.content}\n\n---\n\n`
   }
-  const blob = new Blob([md], { type: 'text/markdown' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `${s.title}.md`
-  a.click()
+  
+  try {
+    const path = await save({
+      defaultPath: `${s.title.replace(/[\/\?<>\\:\*\|":]/g, '') || 'chat'}.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    })
+    
+    if (path) {
+      await writeTextFile(path, md)
+    }
+  } catch (e) {
+    store.configError = '导出失败: ' + (e instanceof Error ? e.message : String(e))
+  }
 }
 
 /* ===== File & Input ===== */
@@ -358,14 +369,22 @@ onMounted(() => {
 
 <template>
   <div class="fc-dark" @click="store.showModelPicker = false">
+    <!-- Premium Ambient Background -->
+    <div class="ambient-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <div class="noise-overlay"></div>
+    </div>
+
     <div v-if="store.configError" class="fc-error">{{ store.configError }}</div>
 
     <div class="fc-layout">
       <!-- ===== Conversation Sidebar ===== -->
       <aside class="conv-sidebar">
         <button class="new-chat-btn" @click="createNewSession">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          新对话
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          开启新对话
         </button>
         <div class="conv-list">
           <div v-for="s in serviceSessions" :key="s.id"
@@ -377,7 +396,7 @@ onMounted(() => {
               <input v-model="editingTitle" class="conv-edit-input" @keydown.enter="confirmRename" @keydown.escape="cancelRename" @blur="confirmRename" @click.stop autofocus />
             </div>
             <template v-else>
-              <svg class="conv-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              <svg class="conv-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
               <span class="conv-title">{{ s.title }}</span>
               <button v-if="hoverSessionId === s.id" class="conv-del" @click.stop="deleteSession(s.id)" title="删除">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -392,12 +411,19 @@ onMounted(() => {
         <!-- Empty / Welcome State -->
         <div v-if="!store.activeSession || store.messages.length === 0" class="chat-welcome">
           <div class="welcome-inner">
-            <img src="/chatplex-logo.png" class="welcome-logo-img" alt="ChatPlex" />
-            <h1 class="welcome-title">有什么可以帮你的？</h1>
+            <div class="welcome-logo-wrapper">
+              <div class="logo-glow"></div>
+              <img src="/chatplex-logo.png" class="welcome-logo-img" alt="ChatPlex" />
+            </div>
+            <h1 class="welcome-title">What can I help you with?</h1>
+            <p class="welcome-subtitle">选择模型以开始一段全新的智能对话</p>
+            
             <button class="model-chip" @click.stop="store.showModelPicker = !store.showModelPicker">
-              <span class="chip-dot"></span>{{ store.selectedModel || '选择模型' }}
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              <span class="chip-dot"></span>
+              <span class="chip-text">{{ store.selectedModel || '选择模型' }}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
+            
             <div v-if="store.showModelPicker && store.modelList.length > 1" class="dropdown" @click.stop>
               <div v-for="m in store.modelList" :key="m.name" class="dd-opt" :class="{ sel: store.selectedModel === m.name }" @click="selectModel(m.name)">
                 <span class="dd-dot" :class="m.type"></span><span class="dd-name">{{ m.name }}</span>
@@ -410,33 +436,39 @@ onMounted(() => {
         <!-- Chat Messages -->
         <div v-else class="chat-messages-wrap">
           <SearchBar />
-          <div class="chat-header" @click.stop>
-            <button class="ch-btn" @click="store.toggleSearch()" title="搜索 (Ctrl+F)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </button>
-            <button class="ch-btn" @click="exportAsMarkdown" title="导出 Markdown">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button class="ch-model" @click="store.showModelPicker = !store.showModelPicker">
-              <span class="ch-dot"></span>{{ store.selectedModel }}
-              <svg v-if="store.modelList.length > 1" width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-            </button>
-            <div v-if="store.showModelPicker && store.modelList.length > 1" class="dropdown dd-header" @click.stop>
-              <div v-for="m in store.modelList" :key="m.name" class="dd-opt" :class="{ sel: store.selectedModel === m.name }" @click="selectModel(m.name)">
-                <span class="dd-dot" :class="m.type"></span><span class="dd-name">{{ m.name }}</span>
-                <span v-if="m.type === 'chatimages'" class="dd-tag">多模态</span>
+          
+          <div class="chat-header-wrapper">
+            <div class="chat-header" @click.stop>
+              <button class="ch-btn" @click="store.toggleSearch()" title="搜索 (Ctrl+F)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </button>
+              <button class="ch-btn" @click="exportAsMarkdown" title="导出 Markdown">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
+              <div class="ch-divider"></div>
+              <button class="ch-model" @click="store.showModelPicker = !store.showModelPicker">
+                <span class="ch-dot"></span>{{ store.selectedModel }}
+                <svg v-if="store.modelList.length > 1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div v-if="store.showModelPicker && store.modelList.length > 1" class="dropdown dd-header" @click.stop>
+                <div v-for="m in store.modelList" :key="m.name" class="dd-opt" :class="{ sel: store.selectedModel === m.name }" @click="selectModel(m.name)">
+                  <span class="dd-dot" :class="m.type"></span><span class="dd-name">{{ m.name }}</span>
+                  <span v-if="m.type === 'chatimages'" class="dd-tag">多模态</span>
+                </div>
               </div>
             </div>
           </div>
+
           <div class="chat-scroll" ref="chatScroll">
             <div class="chat-msgs">
               <div v-for="(msg, i) in store.messages" :key="i"
                 class="msg-row" :class="msg.role"
                 @mouseenter="hoveredMsgIndex = i" @mouseleave="hoveredMsgIndex = -1">
+                
                 <div class="msg-avatar" :class="msg.role">
-                  <svg v-if="msg.role === 'assistant'" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" fill="rgba(255,255,255,0.9)"/><path d="M2 17l10 5 10-5" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><path d="M2 12l10 5 10-5" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/></svg>
-                  <span v-else>你</span>
+                  <svg v-if="msg.role === 'assistant'" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="2"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="2"/></svg>
                 </div>
+                
                 <div class="msg-content">
                   <MessageActions v-if="hoveredMsgIndex === i && !msg.streaming" :role="msg.role"
                     @copy="handleCopy(msg)"
@@ -444,24 +476,27 @@ onMounted(() => {
                     @edit="startEdit(i)"
                     @remove="handleRemove(i)" />
                   <img v-if="msg.image" :src="msg.image" class="msg-img" />
+                  
                   <div v-if="msg.reasoning" class="msg-reasoning">
                     <button class="reasoning-toggle" @click="store.showReasoning[i] = !store.showReasoning[i]">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                      <span>{{ msg.streaming && !msg.content ? '思考中...' : '已深度思考' }}</span>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" :class="{ rot: store.showReasoning[i] }"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                      <span>{{ msg.streaming && !msg.content ? '深度思考中...' : '深度思考已完成' }}</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rot: store.showReasoning[i] }"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
                     <div v-if="store.showReasoning[i]" class="reasoning-body">
                       <MarkdownRenderer :content="msg.reasoning" />
                     </div>
                   </div>
+                  
                   <!-- Edit mode -->
                   <div v-if="editingMsgIndex === i" class="msg-edit-box">
                     <textarea v-model="editingMsgContent" class="msg-edit-textarea" @keydown.enter.ctrl="confirmEditMsg" @keydown.escape="cancelEditMsg" />
                     <div class="msg-edit-actions">
-                      <button @click="confirmEditMsg" class="edit-confirm">发送</button>
+                      <button @click="confirmEditMsg" class="edit-confirm">保存并发送</button>
                       <button @click="cancelEditMsg" class="edit-cancel">取消</button>
                     </div>
                   </div>
+                  
                   <!-- Normal content -->
                   <template v-else>
                     <div v-if="msg.content" class="cm-text" :class="{ 'is-streaming': msg.streaming }">
@@ -476,32 +511,39 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Input Zone -->
-        <div class="input-zone"
-          @dragover.prevent="isDragging = true"
-          @dragleave="isDragging = false"
-          @drop.prevent="handleDrop">
-          <div v-if="isDragging" class="drag-overlay">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            拖入图片上传
+        <!-- Float Input Zone -->
+        <div class="input-zone-wrapper">
+          <div class="input-zone"
+            @dragover.prevent="isDragging = true"
+            @dragleave="isDragging = false"
+            @drop.prevent="handleDrop">
+            
+            <div v-if="isDragging" class="drag-overlay">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              松开鼠标以上传图片
+            </div>
+            
+            <div v-if="imagePreview" class="img-preview">
+              <img :src="imagePreview" /><button class="img-del" @click="imagePreview = ''"><svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            
+            <div class="input-box">
+              <button v-if="store.isMultimodal" class="ib-attach" @click="fileInput?.click()" title="上传图片">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileSelect" />
+              <textarea ref="textareaRef" v-model="input" :placeholder="store.isMultimodal ? '发送消息或拖入图片...' : '给 AI 发送消息...'" rows="1" :disabled="!!store.configError" @keydown="onKeydown" @input="autoResize" @paste="onPaste" class="ib-text"></textarea>
+              
+              <button v-if="store.loading" class="ib-stop" @click="stopGeneration" title="停止生成">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"/></svg>
+              </button>
+              <button v-else class="ib-send" :class="{ 'has-content': input.trim() || imagePreview }" :disabled="(!input.trim() && !imagePreview) || !!store.configError" @click="sendMessage">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            
+            <p class="input-hint">内容由 AI 生成，请注意甄别 · 公益服务不保证实时可用</p>
           </div>
-          <div v-if="imagePreview" class="img-preview">
-            <img :src="imagePreview" /><button class="img-del" @click="imagePreview = ''">✕</button>
-          </div>
-          <div class="input-box">
-            <button v-if="store.isMultimodal" class="ib-attach" @click="fileInput?.click()" title="上传图片">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-            </button>
-            <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="onFileSelect" />
-            <textarea ref="textareaRef" v-model="input" :placeholder="store.isMultimodal ? '发送消息或拖入/粘贴图片...' : '给 AI 发送消息...'" rows="1" :disabled="!!store.configError" @keydown="onKeydown" @input="autoResize" @paste="onPaste" class="ib-text"></textarea>
-            <button v-if="store.loading" class="ib-stop" @click="stopGeneration" title="停止生成">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-            </button>
-            <button v-else class="ib-send" :disabled="(!input.trim() && !imagePreview) || !!store.configError" @click="sendMessage">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-          <p class="input-hint">内容由 AI 生成，仅供参考 · 公益服务不保证实时可用 · Ctrl+F 搜索 · Ctrl+G 导出</p>
         </div>
       </main>
     </div>
@@ -509,119 +551,275 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.fc-dark { display: flex; flex-direction: column; height: 100%; background: var(--bg-primary, #0a0f16); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans SC', sans-serif; color: var(--text-primary, #e2e8f0); }
-.fc-error { padding: 10px 16px; background: rgba(239,68,68,0.1); border-bottom: 1px solid rgba(239,68,68,0.2); color: #f87171; font-size: 13px; text-align: center; }
-.fc-layout { flex: 1; display: flex; overflow: hidden; }
+/* Base */
+.fc-dark { 
+  display: flex; flex-direction: column; height: 100%; 
+  background: #000000; 
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Noto Sans SC', sans-serif; 
+  color: #ffffff; 
+  position: relative;
+}
+
+/* Ambient Background */
+.ambient-bg {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+}
+.blob {
+  position: absolute; filter: blur(120px); border-radius: 50%; 
+  animation: float 20s infinite alternate ease-in-out; opacity: 0.35;
+}
+.blob-1 { top: -20%; left: -10%; width: 50vw; height: 50vw; background: rgba(59, 130, 246, 0.4); }
+.blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: rgba(168, 85, 247, 0.3); animation-delay: -5s; }
+.blob-3 { top: 30%; left: 30%; width: 40vw; height: 40vw; background: rgba(236, 72, 153, 0.2); animation-delay: -10s; }
+@keyframes float {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(3%, 5%) scale(1.1); }
+}
+.noise-overlay {
+  position: absolute; inset: 0; 
+  background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E'); 
+  opacity: 0.04; mix-blend-mode: overlay;
+}
+
+.fc-error { 
+  position: relative; z-index: 20; padding: 12px 16px; 
+  background: rgba(239, 68, 68, 0.15); backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3); 
+  color: #fca5a5; font-size: 14px; text-align: center; font-weight: 500; 
+}
+
+.fc-layout { position: relative; z-index: 10; flex: 1; display: flex; overflow: hidden; }
 
 /* ===== Conversation Sidebar ===== */
-.conv-sidebar { width: 260px; background: var(--bg-sidebar, #0f1520); border-right: 1px solid var(--border-color, #1a2435); display: flex; flex-direction: column; flex-shrink: 0; }
-.new-chat-btn { display: flex; align-items: center; gap: 8px; margin: 12px; padding: 10px 16px; background: var(--bg-secondary, #1a2435); border: 1px solid var(--border-color, #243447); border-radius: 10px; color: var(--text-primary, #e2e8f0); font-size: 14px; cursor: pointer; transition: all 0.15s; font-weight: 500; }
-.new-chat-btn:hover { background: var(--bg-tertiary, #243447); border-color: var(--accent, #3b82f6); }
-.conv-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
-.conv-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.12s; position: relative; margin-bottom: 2px; }
-.conv-item:hover { background: rgba(255,255,255,0.04); }
-.conv-item.active { background: rgba(59,130,246,0.1); border-left: 3px solid var(--accent, #3b82f6); padding-left: 9px; }
-.conv-icon { color: var(--text-muted, #64748b); flex-shrink: 0; }
-.conv-title { flex: 1; font-size: 13px; color: var(--text-secondary, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-item.active .conv-title { color: var(--text-primary, #e2e8f0); }
-.conv-del { background: none; border: none; color: var(--text-muted, #64748b); cursor: pointer; padding: 2px; border-radius: 4px; display: flex; align-items: center; transition: color 0.15s; }
-.conv-del:hover { color: #f87171; }
+.conv-sidebar { 
+  width: 260px; 
+  background: transparent; 
+  border-right: 1px solid rgba(255,255,255,0.06); 
+  display: flex; flex-direction: column; flex-shrink: 0; 
+}
+.new-chat-btn { 
+  display: flex; align-items: center; justify-content: center; gap: 8px; 
+  margin: 20px 16px; padding: 12px; 
+  background: rgba(255,255,255,0.03); 
+  border: 1px solid rgba(255,255,255,0.08); 
+  border-radius: 16px; color: #ffffff; font-size: 14px; 
+  cursor: pointer; transition: all 0.2s; font-weight: 600; 
+}
+.new-chat-btn:hover { 
+  background: rgba(255,255,255,0.08); 
+  transform: translateY(-1px); 
+}
+.conv-list { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.conv-item { 
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; 
+  border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; 
+}
+.conv-item:hover { background: rgba(255,255,255,0.05); }
+.conv-item.active { 
+  background: rgba(255,255,255,0.1); 
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.conv-icon { color: #52525b; flex-shrink: 0; transition: color 0.2s; }
+.conv-item.active .conv-icon { color: #ffffff; }
+.conv-title { flex: 1; font-size: 14px; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; transition: color 0.2s; }
+.conv-item.active .conv-title { color: #ffffff; font-weight: 600; }
+.conv-del { 
+  background: none; border: none; color: #52525b; cursor: pointer; 
+  padding: 4px; border-radius: 6px; display: flex; align-items: center; transition: all 0.2s; 
+}
+.conv-del:hover { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
+
 .conv-edit { flex: 1; }
-.conv-edit-input { width: 100%; background: var(--bg-secondary, #1a2435); border: 1px solid var(--accent, #3b82f6); border-radius: 4px; padding: 4px 8px; color: var(--text-primary, #e2e8f0); font-size: 13px; outline: none; }
+.conv-edit-input { 
+  width: 100%; background: rgba(0,0,0,0.5); 
+  border: 1px solid var(--accent, #3b82f6); border-radius: 8px; 
+  padding: 6px 10px; color: #ffffff; font-size: 14px; outline: none; 
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); 
+}
 
 /* ===== Chat Area ===== */
-.chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; background: transparent; }
+
+/* Welcome State */
 .chat-welcome { flex: 1; display: flex; align-items: center; justify-content: center; }
-.welcome-inner { display: flex; flex-direction: column; align-items: center; position: relative; }
-.welcome-logo-img { width: 88px; height: 88px; border-radius: 20px; margin-bottom: 20px; filter: drop-shadow(0 8px 24px rgba(96,165,250,0.2)); }
-.welcome-title { font-size: 26px; font-weight: 600; margin: 0 0 20px; }
+.welcome-inner { display: flex; flex-direction: column; align-items: center; position: relative; animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-.model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; background: var(--bg-secondary, #1a2435); border: 1px solid var(--border-color, #243447); border-radius: 24px; font-size: 13px; color: var(--text-secondary, #94a3b8); cursor: pointer; transition: all 0.2s; font-weight: 500; }
-.model-chip:hover { border-color: var(--accent, #3b82f6); color: var(--text-primary); }
-.chip-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
-.dropdown { position: absolute; left: 50%; transform: translateX(-50%); margin-top: 8px; background: var(--bg-secondary, #131b27); border: 1px solid var(--border-color, #1e293b); border-radius: 12px; padding: 4px; min-width: 240px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); z-index: 200; animation: ddIn 0.18s cubic-bezier(0.16,1,0.3,1); }
-.dd-header { top: 44px; left: 50%; }
-@keyframes ddIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.97); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
-.dd-opt { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer; transition: background 0.12s; font-size: 13px; color: var(--text-secondary, #94a3b8); }
-.dd-opt:hover { background: var(--bg-primary, #1a2435); color: var(--text-primary); }
-.dd-opt.sel { background: rgba(59,130,246,0.15); color: #60a5fa; }
-.dd-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted, #475569); flex-shrink: 0; }
-.dd-dot.chatimages { background: #8b5cf6; }
-.dd-name { flex: 1; font-weight: 500; }
-.dd-tag { font-size: 10px; background: rgba(139,92,246,0.15); color: #a78bfa; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
+.welcome-logo-wrapper { position: relative; margin-bottom: 32px; }
+.logo-glow { position: absolute; top: 50%; left: 50%; width: 100px; height: 100px; background: var(--accent, #3b82f6); filter: blur(40px); opacity: 0.4; transform: translate(-50%, -50%); z-index: 1; }
+.welcome-logo-img { position: relative; width: 100px; height: 100px; border-radius: 28px; z-index: 2; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1); }
 
-/* ===== Chat Messages ===== */
+.welcome-title { 
+  font-size: 40px; font-weight: 800; margin: 0 0 12px; letter-spacing: -0.04em; 
+  background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text; color: transparent;
+}
+.welcome-subtitle { font-size: 16px; color: #a1a1aa; margin: 0 0 32px; font-weight: 500; }
+
+.model-chip { 
+  display: inline-flex; align-items: center; gap: 10px; padding: 12px 24px; 
+  background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 30px; 
+  font-size: 15px; color: #ffffff; cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+  font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.2); 
+}
+.model-chip:hover { 
+  background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); 
+  transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+}
+.chip-dot { width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.6); }
+
+/* Dropdown */
+.dropdown { 
+  position: absolute; left: 50%; transform: translateX(-50%); margin-top: 16px; 
+  background: rgba(15, 15, 15, 0.7); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 8px; 
+  min-width: 280px; box-shadow: 0 24px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05); 
+  z-index: 200; animation: ddIn 0.25s cubic-bezier(0.16,1,0.3,1); 
+}
+.dd-header { top: 60px; left: 50%; }
+@keyframes ddIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+.dd-opt { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; cursor: pointer; transition: all 0.2s; font-size: 14px; color: #a1a1aa; }
+.dd-opt:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
+.dd-opt.sel { background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05)); color: #60a5fa; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); }
+.dd-dot { width: 8px; height: 8px; border-radius: 50%; background: #52525b; flex-shrink: 0; }
+.dd-dot.chatimages { background: #a78bfa; box-shadow: 0 0 8px rgba(167, 139, 250, 0.5); }
+.dd-name { flex: 1; }
+.dd-tag { font-size: 10px; background: rgba(167, 139, 250, 0.15); color: #c4b5fd; padding: 2px 8px; border-radius: 6px; font-weight: 700; letter-spacing: 0.5px; }
+
+/* Chat Messages */
 .chat-messages-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.chat-header { position: relative; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--border-color, #1a2435); flex-shrink: 0; z-index: 100; }
-.ch-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-secondary, #64748b); cursor: pointer; border-radius: 6px; transition: all 0.15s; }
-.ch-btn:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
-.ch-model { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 16px; font-size: 13px; color: var(--text-secondary, #94a3b8); cursor: pointer; font-weight: 500; background: none; border: none; transition: all 0.15s; }
-.ch-model:hover { background: var(--bg-secondary, #1a2435); color: var(--text-primary); }
-.ch-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
-.chat-scroll { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
-.chat-msgs { max-width: 780px; margin: 0 auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 24px; }
+.chat-header-wrapper { display: flex; justify-content: center; padding: 16px; position: absolute; top: 0; left: 0; right: 0; z-index: 100; pointer-events: none; }
+.chat-header { 
+  pointer-events: auto; display: flex; align-items: center; gap: 8px; 
+  padding: 8px 12px; border-radius: 24px;
+  background: rgba(15, 15, 15, 0.6); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.ch-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #a1a1aa; cursor: pointer; border-radius: 50%; transition: all 0.2s; }
+.ch-btn:hover { background: rgba(255,255,255,0.1); color: #ffffff; }
+.ch-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+.ch-model { 
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; 
+  border-radius: 18px; font-size: 14px; color: #ffffff; cursor: pointer; font-weight: 600; 
+  background: rgba(255,255,255,0.05); border: none; transition: all 0.2s; 
+}
+.ch-model:hover { background: rgba(255,255,255,0.1); }
+.ch-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
 
-.msg-row { display: flex; gap: 12px; animation: msgIn 0.25s ease; position: relative; }
-@keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.msg-avatar { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-.msg-avatar.assistant { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
-.msg-avatar.user { background: linear-gradient(135deg, #3b82f6, #06b6d4); color: white; }
-.msg-content { flex: 1; min-width: 0; position: relative; }
+.chat-scroll { flex: 1; overflow-y: auto; scroll-behavior: smooth; padding-top: 80px; } /* padding for absolute header */
+.chat-msgs { max-width: 860px; margin: 0 auto; padding: 24px 24px 160px; display: flex; flex-direction: column; gap: 40px; }
+
+.msg-row { display: flex; gap: 20px; animation: msgIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); position: relative; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.msg-avatar { 
+  width: 38px; height: 38px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; 
+}
+.msg-avatar.assistant { color: #ffffff; background: linear-gradient(135deg, #10b981, #0ea5e9); box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3); }
+.msg-avatar.user { display: none; } /* Hide user avatar for cleaner look */
+.msg-content { flex: 1; min-width: 0; position: relative; padding-top: 2px; }
 .msg-row.user .msg-content { display: flex; flex-direction: column; align-items: flex-end; }
-.msg-img { max-width: 300px; max-height: 220px; border-radius: 10px; object-fit: cover; margin-bottom: 6px; }
+.msg-img { max-width: 360px; max-height: 280px; border-radius: 16px; object-fit: cover; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 12px 24px rgba(0,0,0,0.3); }
 
-.cm-text { font-size: 14px; line-height: 1.75; word-break: break-word; }
-.msg-row.user .cm-text { background: var(--chat-user, #e3f2fd); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 70%; }
-.msg-row.assistant .cm-text { padding: 4px 0; }
-.cm-text.is-streaming::after { content: ''; display: inline-block; width: 2px; height: 16px; background: #60a5fa; margin-left: 2px; animation: blink 0.8s infinite; vertical-align: text-bottom; }
-@keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+.cm-text { font-size: 16px; line-height: 1.7; word-break: break-word; color: #e2e8f0; }
+.msg-row.user .cm-text { 
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  padding: 14px 22px; border-radius: 22px 22px 6px 22px; max-width: 80%; 
+  border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.msg-row.assistant .cm-text { padding: 0; color: #f4f4f5; }
+.cm-text.is-streaming::after { 
+  content: ''; display: inline-block; width: 4px; height: 20px; 
+  background: var(--accent, #60a5fa); margin-left: 6px; border-radius: 2px; 
+  animation: blink 1s infinite cubic-bezier(0.4, 0, 0.2, 1); vertical-align: text-bottom; 
+}
 
-.msg-reasoning { margin-bottom: 8px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.06); }
-.reasoning-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; font-size: 13px; color: #818cf8; font-weight: 500; transition: background 0.15s; }
-.reasoning-toggle:hover { background: rgba(99,102,241,0.1); }
+.msg-reasoning { 
+  margin-bottom: 16px; border-radius: 16px; overflow: hidden; 
+  border: 1px solid rgba(167, 139, 250, 0.2); background: rgba(167, 139, 250, 0.05); 
+}
+.reasoning-toggle { 
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 20px; 
+  border: none; background: none; cursor: pointer; font-size: 14px; color: #c4b5fd; 
+  font-weight: 600; transition: background 0.2s; 
+}
+.reasoning-toggle:hover { background: rgba(167, 139, 250, 0.1); }
 .reasoning-toggle svg.rot { transform: rotate(180deg); }
-.reasoning-toggle svg { transition: transform 0.2s; flex-shrink: 0; }
-.reasoning-body { padding: 0 12px 10px; font-size: 13px; line-height: 1.7; color: var(--text-secondary, #94a3b8); border-top: 1px solid rgba(99,102,241,0.15); max-height: 300px; overflow-y: auto; }
+.reasoning-toggle svg { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); flex-shrink: 0; }
+.reasoning-body { padding: 4px 20px 20px; font-size: 15px; line-height: 1.7; color: #a1a1aa; border-top: 1px solid rgba(167, 139, 250, 0.1); max-height: 500px; overflow-y: auto; }
 
-.typing { display: flex; gap: 5px; padding: 4px 0; }
-.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted, #475569); animation: dotB 1.4s infinite; }
-.typing span:nth-child(2) { animation-delay: 0.15s; }
-.typing span:nth-child(3) { animation-delay: 0.3s; }
-@keyframes dotB { 0%,80%,100% { transform: scale(0.5); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
+.typing { display: flex; gap: 6px; padding: 10px 0; }
+.typing span { width: 8px; height: 8px; border-radius: 50%; background: #ffffff; animation: dotB 1.4s infinite ease-in-out both; opacity: 0.8; }
+.typing span:nth-child(1) { animation-delay: -0.32s; }
+.typing span:nth-child(2) { animation-delay: -0.16s; }
 
-/* Message edit */
-.msg-edit-box { display: flex; flex-direction: column; gap: 8px; }
-.msg-edit-textarea {
-  width: 100%; min-height: 80px; padding: 10px 12px; background: var(--bg-secondary, #131b27);
-  border: 1px solid var(--accent, #3b82f6); border-radius: 10px;
-  color: var(--text-primary, #e2e8f0); font-size: 14px; resize: vertical; outline: none; font-family: inherit;
+/* Edit mode */
+.msg-edit-box { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 680px; }
+.msg-edit-textarea { 
+  width: 100%; min-height: 100px; padding: 16px; background: rgba(0,0,0,0.4); 
+  border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; color: #ffffff; 
+  font-size: 16px; resize: vertical; outline: none; font-family: inherit; line-height: 1.6; 
+  transition: all 0.3s;
 }
-.msg-edit-actions { display: flex; gap: 8px; }
-.edit-confirm { padding: 6px 16px; background: var(--accent, #3b82f6); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
-.edit-cancel { padding: 6px 16px; background: none; color: var(--text-secondary, #94a3b8); border: 1px solid var(--border-color, #243447); border-radius: 6px; font-size: 12px; cursor: pointer; }
+.msg-edit-textarea:focus { border-color: var(--accent, #3b82f6); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15); }
+.msg-edit-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.edit-confirm { padding: 10px 24px; background: #ffffff; color: #000; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.edit-confirm:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255,255,255,0.2); }
+.edit-cancel { padding: 10px 24px; background: rgba(255,255,255,0.05); color: #ffffff; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.edit-cancel:hover { background: rgba(255,255,255,0.1); }
 
-/* ===== Input Zone ===== */
-.input-zone { padding: 12px 24px 16px; max-width: 780px; width: 100%; margin: 0 auto; position: relative; }
-.drag-overlay {
-  position: absolute; inset: 0; background: rgba(59,130,246,0.1); border: 2px dashed var(--accent, #3b82f6);
-  border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;
-  color: var(--accent, #3b82f6); font-size: 14px; font-weight: 500; z-index: 10; pointer-events: none;
+/* ===== Floating Input Zone ===== */
+.input-zone-wrapper {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 0 24px 32px;
+  display: flex; justify-content: center;
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+  pointer-events: none; /* Let clicks pass through gradient */
 }
-.img-preview { display: flex; gap: 6px; padding-bottom: 8px; }
-.img-preview img { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color, #1e293b); }
-.img-del { width: 22px; height: 22px; border-radius: 50%; background: rgba(239,68,68,0.15); border: none; color: #f87171; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.input-box { display: flex; align-items: flex-end; gap: 8px; background: var(--bg-secondary, #131b27); border: 1px solid var(--border-color, #243447); border-radius: 24px; padding: 10px 12px 10px 16px; transition: border-color 0.2s, box-shadow 0.2s; }
-.input-box:focus-within { border-color: var(--accent, #3b82f6); box-shadow: 0 0 0 3px rgba(59,130,246,0.08), 0 4px 20px rgba(0,0,0,0.3); }
-.ib-attach { width: 36px; height: 36px; border-radius: 50%; background: none; border: none; color: var(--text-muted, #64748b); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
-.ib-attach:hover { color: #60a5fa; background: rgba(96,165,250,0.1); }
-.ib-text { flex: 1; background: none; border: none; outline: none; color: var(--text-primary, #e2e8f0); font-size: 15px; line-height: 1.5; resize: none; min-height: 24px; max-height: 160px; font-family: inherit; padding: 6px 0; }
-.ib-text::placeholder { color: var(--text-muted, #4b5563); }
-.ib-send, .ib-stop { width: 36px; height: 36px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.2s; }
-.ib-send { background: var(--accent, #3b82f6); color: white; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
-.ib-send:hover:not(:disabled) { background: #2563eb; transform: scale(1.05); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
-.ib-send:disabled { background: var(--bg-tertiary, #1e293b); color: var(--text-muted, #475569); box-shadow: none; cursor: not-allowed; }
-.ib-stop { background: #ef4444; color: white; box-shadow: 0 2px 8px rgba(239,68,68,0.3); animation: pulse 1.5s infinite; }
+.input-zone { width: 100%; max-width: 860px; position: relative; pointer-events: auto; }
+.drag-overlay { 
+  position: absolute; inset: -16px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); 
+  border: 2px dashed rgba(255,255,255,0.4); border-radius: 36px; display: flex; align-items: center; justify-content: center; 
+  gap: 12px; color: #fff; font-size: 18px; font-weight: 600; z-index: 10; pointer-events: none; animation: fadeIn 0.2s; 
+}
+.img-preview { display: flex; gap: 12px; padding-bottom: 16px; padding-left: 16px; }
+.img-preview img { width: 80px; height: 80px; border-radius: 16px; object-fit: cover; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.img-del { width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transform: translate(-14px, -14px); transition: all 0.2s; }
+.img-del:hover { background: #ef4444; border-color: #ef4444; transform: translate(-14px, -14px) scale(1.1); }
+
+.input-box { 
+  display: flex; align-items: flex-end; gap: 16px; 
+  background: rgba(20, 20, 20, 0.6); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 32px; 
+  padding: 12px 16px 12px 24px; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+  box-shadow: 0 24px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05); 
+}
+.input-box:focus-within { 
+  border-color: rgba(255,255,255,0.25); background: rgba(30, 30, 30, 0.7); 
+  box-shadow: 0 32px 64px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1); 
+}
+
+.ib-attach { width: 44px; height: 44px; border-radius: 50%; background: transparent; border: none; color: #a1a1aa; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+.ib-attach:hover { color: #ffffff; background: rgba(255,255,255,0.1); }
+
+.ib-text { 
+  flex: 1; background: transparent; border: none; outline: none; 
+  color: #ffffff; font-size: 16px; line-height: 1.6; resize: none; 
+  min-height: 26px; max-height: 240px; font-family: inherit; padding: 10px 0; 
+}
+.ib-text::placeholder { color: #52525b; }
+
+.ib-send, .ib-stop { width: 44px; height: 44px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.ib-send { background: rgba(255,255,255,0.08); color: #52525b; }
+.ib-send.has-content { background: #ffffff; color: #000000; box-shadow: 0 8px 24px rgba(255,255,255,0.3); }
+.ib-send.has-content:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 12px 32px rgba(255,255,255,0.4); }
+.ib-send:disabled { cursor: not-allowed; }
+
+.ib-stop { background: #ef4444; color: white; box-shadow: 0 8px 24px rgba(239,68,68,0.4); animation: stopPulse 2s infinite; }
 .ib-stop:hover { background: #dc2626; transform: scale(1.05); }
-@keyframes pulse { 0%,100% { box-shadow: 0 2px 8px rgba(239,68,68,0.3); } 50% { box-shadow: 0 2px 16px rgba(239,68,68,0.5); } }
-.input-hint { font-size: 12px; color: var(--text-muted, #475569); text-align: center; margin: 10px 0 0; }
+@keyframes stopPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 12px rgba(239,68,68,0); } }
+
+.input-hint { font-size: 13px; color: #52525b; text-align: center; margin: 20px 0 0; font-weight: 500; letter-spacing: 0.5px; }
 </style>

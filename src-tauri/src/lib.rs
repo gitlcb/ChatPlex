@@ -248,7 +248,7 @@ fn encrypt_value(value: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn decrypt_value(encrypted: String) -> Result<String, String> {
+async fn decrypt_value(encrypted: String) -> Result<String, String> {
     Ok(encrypted)
 }
 
@@ -257,6 +257,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             use tauri::Manager;
@@ -279,6 +280,20 @@ pub fn run() {
             use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
             use tauri::menu::{Menu, MenuItemBuilder};
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            use tauri::webview::WebviewWindowBuilder;
+            
+            // Create main window with download interception
+            let _main_window = WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+                .title("ChatPlex")
+                .inner_size(1328.0, 800.0)
+                .min_inner_size(848.0, 600.0)
+                .center()
+                .decorations(false)
+                .shadow(true)
+                .on_download(|_webview, _event| {
+                    true // Allow system download dialog
+                })
+                .build()?;
 
             // Register global shortcuts
             let gs = app.global_shortcut();

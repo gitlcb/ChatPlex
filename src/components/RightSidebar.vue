@@ -5,73 +5,118 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
 </script>
 
 <template>
-  <aside class="right-sidebar">
-    <button
-      class="rs-btn"
-      :class="{ active: activeRightPanel === 'settings' }"
-      title="设置"
-      @click="toggleRightPanel('settings')"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-      </svg>
-      <span class="rs-indicator" :class="{ visible: activeRightPanel === 'settings' }"></span>
-    </button>
+  <div class="rs-container">
+    <aside class="right-sidebar">
+      <div class="rs-group">
+        <button
+          class="rs-btn"
+          :class="{ active: activeRightPanel === 'settings' }"
+          title="设置"
+          @click="toggleRightPanel('settings')"
+        >
+          <div class="rs-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path>
+            </svg>
+          </div>
+        </button>
 
-    <button
-      class="rs-btn"
-      :class="{ active: activeRightPanel === 'about' }"
-      title="关于"
-      @click="toggleRightPanel('about')"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-      </svg>
-      <span class="rs-indicator" :class="{ visible: activeRightPanel === 'about' }"></span>
-    </button>
+        <button
+          class="rs-btn"
+          :class="{ active: activeRightPanel === 'about' }"
+          title="关于"
+          @click="toggleRightPanel('about')"
+        >
+          <div class="rs-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
+          </div>
+        </button>
+      </div>
 
-    <button
-      class="rs-btn"
-      :class="{ active: activeRightPanel === 'entertainment' }"
-      title="娱乐中心"
-      @click="toggleRightPanel('entertainment')"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-3.5 6a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm7 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM12 17.5c-2.33 0-4.31-1.46-5.11-3.5h10.22c-.8 2.04-2.78 3.5-5.11 3.5z"/>
-      </svg>
-      <span class="rs-indicator" :class="{ visible: activeRightPanel === 'entertainment' }"></span>
-    </button>
+      <div class="rs-divider"></div>
 
-    <button
-      class="rs-btn"
-      :class="{ active: activeRightPanel === 'vibe-coding' }"
-      title="Vibe Coding 推荐"
-      @click="toggleRightPanel('vibe-coding')"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="16 18 22 12 16 6"/>
-        <polyline points="8 6 2 12 8 18"/>
-      </svg>
-      <span class="rs-indicator" :class="{ visible: activeRightPanel === 'vibe-coding' }"></span>
-    </button>
-  </aside>
+      <div class="rs-group">
+        <button
+          class="rs-btn"
+          :class="{ active: activeRightPanel === 'entertainment' }"
+          title="娱乐中心"
+          @click="toggleRightPanel('entertainment')"
+        >
+          <div class="rs-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+              <path d="M12 12h.01"></path>
+              <path d="M17 12h.01"></path>
+              <path d="M7 12h.01"></path>
+            </svg>
+          </div>
+        </button>
+
+        <button
+          class="rs-btn"
+          :class="{ active: activeRightPanel === 'vibe-coding' }"
+          title="Vibe Coding"
+          @click="toggleRightPanel('vibe-coding')"
+        >
+          <div class="rs-icon-wrapper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+          </div>
+        </button>
+      </div>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
+.rs-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  background: var(--bg-primary, #0a0f16); /* Add a solid base behind the glass to prevent webview bleed if necessary */
+  padding: 0 12px 0 12px; 
+  flex-shrink: 0; /* Prevent shrinking in flex container */
+  z-index: 200;
+  border-left: 1px solid rgba(255, 255, 255, 0.05); /* Clean separator from content area */
+}
+
 .right-sidebar {
   width: 48px;
-  height: 100%;
-  background: #0c1017;
-  border-left: 1px solid #1a2435;
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0;
-  gap: 4px;
+  padding: 16px 0;
+  gap: 12px;
   flex-shrink: 0;
-  z-index: 100;
+}
+
+.rs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+
+.rs-divider {
+  width: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  margin: 4px 0;
 }
 
 .rs-btn {
@@ -83,24 +128,34 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  color: #64748b;
+  border-radius: 12px;
+  color: #a1a1aa; /* Zinc 400 */
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  outline: none;
 }
-.rs-btn:hover { background: rgba(255,255,255,0.04); color: #e2e8f0; }
-.rs-btn.active { background: rgba(59,130,246,0.12); color: #e2e8f0; }
 
-.rs-indicator {
-  position: absolute;
-  right: -6px;
-  top: 50%;
-  transform: translateY(-50%) scaleY(0);
-  width: 3px;
-  height: 20px;
-  border-radius: 3px 0 0 3px;
-  background: #3b82f6;
-  transition: transform 0.2s cubic-bezier(0.4,0,0.2,1);
+.rs-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  background: transparent;
 }
-.rs-indicator.visible { transform: translateY(-50%) scaleY(1); }
+
+.rs-btn:hover .rs-icon-wrapper {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.rs-btn.active .rs-icon-wrapper {
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2);
+  transform: scale(1);
+}
 </style>
