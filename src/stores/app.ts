@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { CustomService, CustomModel } from '../types/services'
 import { PALETTE } from '../types/services'
 
@@ -86,7 +87,17 @@ export const useAppStore = defineStore('app', {
       if (t === 'system') {
         t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
       }
-      document.documentElement.classList.toggle('dark', t === 'dark')
+      const isDark = t === 'dark'
+      document.documentElement.classList.toggle('dark', isDark)
+      document.documentElement.dataset.theme = t
+      document.documentElement.style.colorScheme = t
+      document.body?.classList.toggle('dark', isDark)
+      if (document.body) {
+        document.body.dataset.theme = t
+        document.body.style.colorScheme = t
+      }
+      getCurrentWindow().setTheme(t).catch(() => {})
+      window.dispatchEvent(new CustomEvent('chatplex-theme-changed', { detail: t }))
     },
 
     setTheme(t: Theme) {

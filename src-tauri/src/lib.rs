@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use regex::Regex;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use std::path::PathBuf;
+use std::sync::mpsc::sync_channel;
 
 #[derive(Deserialize)]
 struct ChatRequest {
@@ -23,6 +25,142 @@ struct StreamChunk {
 #[derive(Clone, Serialize)]
 struct StreamDone {
     done: bool,
+}
+
+#[derive(Deserialize)]
+struct ServiceWebviewOptions {
+    label: String,
+    url: String,
+    theme: Option<String>,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+#[derive(Clone, Serialize)]
+struct ServiceDownloadEvent {
+    status: String,
+    url: String,
+    file_name: Option<String>,
+    path: Option<String>,
+    success: Option<bool>,
+    message: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct ServiceNavigationEvent {
+    label: String,
+    url: String,
+}
+
+fn path_to_string(path: &PathBuf) -> String {
+    path.to_string_lossy().to_string()
+}
+
+fn suggested_download_filename(url: &tauri::Url, destination: &PathBuf) -> String {
+    destination
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .map(ToString::to_string)
+        .or_else(|| {
+            url.path_segments()
+                .and_then(|mut segments| segments.next_back())
+                .filter(|name| !name.trim().is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_else(|| "download".to_string())
+}
+
+fn webview_theme_script(theme: &str) -> String {
+    let is_dark = theme == "dark";
+    format!(
+        r#"
+(function() {{
+  var isDark = {is_dark};
+  function applyTheme() {{
+    try {{
+      document.documentElement.dataset.chatplexTheme = isDark ? 'dark' : 'light';
+      document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      if (document.body) document.body.style.colorScheme = isDark ? 'dark' : 'light';
+    }} catch (_) {{}}
+  }}
+
+  if (!window.__chatplexThemeBridgeInstalled) {{
+    window.__chatplexThemeBridgeInstalled = true;
+    var nativeMatchMedia = window.matchMedia ? window.matchMedia.bind(window) : null;
+    var themeListeners = [];
+    window.__chatplexThemeBridgeState = {{ isDark: isDark, listeners: themeListeners }};
+
+    window.matchMedia = function(query) {{
+      if (typeof query === 'string' && query.indexOf('prefers-color-scheme') !== -1) {{
+        var wantsDark = query.indexOf('dark') !== -1;
+        var media = {{
+          media: query,
+          matches: wantsDark === window.__chatplexThemeBridgeState.isDark,
+          onchange: null,
+          addEventListener: function(type, listener) {{
+            if (type === 'change' && themeListeners.indexOf(listener) === -1) themeListeners.push(listener);
+          }},
+          removeEventListener: function(type, listener) {{
+            if (type !== 'change') return;
+            var index = themeListeners.indexOf(listener);
+            if (index >= 0) themeListeners.splice(index, 1);
+          }},
+          addListener: function(listener) {{
+            if (themeListeners.indexOf(listener) === -1) themeListeners.push(listener);
+          }},
+          removeListener: function(listener) {{
+            var index = themeListeners.indexOf(listener);
+            if (index >= 0) themeListeners.splice(index, 1);
+          }},
+          dispatchEvent: function() {{ return true; }}
+        }};
+        return media;
+      }}
+      return nativeMatchMedia ? nativeMatchMedia(query) : {{
+        media: query,
+        matches: false,
+        addEventListener: function() {{}},
+        removeEventListener: function() {{}},
+        addListener: function() {{}},
+        removeListener: function() {{}},
+        dispatchEvent: function() {{ return true; }}
+      }};
+    }};
+
+    window.__chatplexSetTheme = function(nextTheme) {{
+      var nextIsDark = nextTheme === 'dark';
+      if (window.__chatplexThemeBridgeState.isDark === nextIsDark) {{
+        applyTheme();
+        return;
+      }}
+      window.__chatplexThemeBridgeState.isDark = nextIsDark;
+      isDark = nextIsDark;
+      applyTheme();
+      var listeners = window.__chatplexThemeBridgeState.listeners.slice();
+      listeners.forEach(function(listener) {{
+        try {{
+          listener({{
+            media: '(prefers-color-scheme: dark)',
+            matches: nextIsDark
+          }});
+        }} catch (_) {{}}
+      }});
+    }};
+  }} else if (window.__chatplexSetTheme) {{
+    window.__chatplexSetTheme(isDark ? 'dark' : 'light');
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', applyTheme, {{ once: true }});
+  }}
+  applyTheme();
+}})();
+"#,
+        is_dark = if is_dark { "true" } else { "false" }
+    )
 }
 
 #[tauri::command]
@@ -168,6 +306,136 @@ async fn eval_js(app: tauri::AppHandle, label: String, script: String) -> Result
 }
 
 #[tauri::command]
+async fn create_service_webview(app: tauri::AppHandle, options: ServiceWebviewOptions) -> Result<(), String> {
+    use tauri::webview::{DownloadEvent, WebviewBuilder};
+    use tauri::{LogicalPosition, LogicalSize, Manager, WebviewUrl};
+
+    let window = app.get_window("main").ok_or("main window not found")?;
+    let url = options
+        .url
+        .parse()
+        .map_err(|e| format!("invalid service url: {}", e))?;
+
+    let download_app_handle = app.clone();
+    let navigation_app_handle = app.clone();
+    let navigation_label = options.label.clone();
+    let theme = options.theme.as_deref().unwrap_or("light");
+    let builder = WebviewBuilder::new(&options.label, WebviewUrl::External(url))
+        .initialization_script_for_all_frames(webview_theme_script(theme))
+        .on_navigation(move |url| {
+            let _ = navigation_app_handle.emit("service-navigation", ServiceNavigationEvent {
+                label: navigation_label.clone(),
+                url: url.to_string(),
+            });
+            true
+        })
+        .on_download(move |_webview, event| {
+            match event {
+                DownloadEvent::Requested { url, destination } => {
+                    eprintln!("[service_webview_download] requested: {}", url);
+                    let file_name = suggested_download_filename(&url, destination);
+                    let dialog_file_name = file_name.clone();
+                    let _ = download_app_handle.emit("service-download", ServiceDownloadEvent {
+                        status: "requested".to_string(),
+                        url: url.to_string(),
+                        file_name: Some(file_name.clone()),
+                        path: None,
+                        success: None,
+                        message: Some("正在选择下载保存位置".to_string()),
+                    });
+                    let starting_directory = destination.parent().map(PathBuf::from);
+                    let (tx, rx) = sync_channel(1);
+
+                    std::thread::spawn(move || {
+                        let mut dialog = rfd::FileDialog::new()
+                            .set_title("选择下载保存位置")
+                            .set_file_name(dialog_file_name);
+
+                        if let Some(directory) = starting_directory {
+                            dialog = dialog.set_directory(directory);
+                        }
+
+                        let _ = tx.send(dialog.save_file());
+                    });
+
+                    match rx.recv() {
+                        Ok(Some(path)) => {
+                            eprintln!("[service_webview_download] destination: {:?}", path);
+                            let _ = download_app_handle.emit("service-download", ServiceDownloadEvent {
+                                status: "selected".to_string(),
+                                url: url.to_string(),
+                                file_name: path.file_name().and_then(|name| name.to_str()).map(ToString::to_string),
+                                path: Some(path_to_string(&path)),
+                                success: None,
+                                message: Some("下载保存位置已选择".to_string()),
+                            });
+                            *destination = path;
+                            true
+                        }
+                        Ok(None) => {
+                            eprintln!("[service_webview_download] canceled: {}", url);
+                            let _ = download_app_handle.emit("service-download", ServiceDownloadEvent {
+                                status: "canceled".to_string(),
+                                url: url.to_string(),
+                                file_name: Some(file_name),
+                                path: None,
+                                success: Some(false),
+                                message: Some("已取消下载".to_string()),
+                            });
+                            false
+                        }
+                        Err(err) => {
+                            eprintln!("[service_webview_download] dialog failed: {}", err);
+                            let _ = download_app_handle.emit("service-download", ServiceDownloadEvent {
+                                status: "failed".to_string(),
+                                url: url.to_string(),
+                                file_name: Some(file_name),
+                                path: None,
+                                success: Some(false),
+                                message: Some(format!("打开保存窗口失败: {}", err)),
+                            });
+                            false
+                        }
+                    }
+                }
+                DownloadEvent::Finished { url, path, success } => {
+                    eprintln!(
+                        "[service_webview_download] finished: {}, path: {:?}, success: {}",
+                        url, path, success
+                    );
+                    let status = if success { "finished" } else { "failed" };
+                    let path_string = path.as_ref().map(path_to_string);
+                    let file_name = path.as_ref()
+                        .and_then(|p| p.file_name())
+                        .and_then(|name| name.to_str())
+                        .map(ToString::to_string);
+                    let message = if success { "下载完成" } else { "下载失败" };
+                    let _ = download_app_handle.emit("service-download", ServiceDownloadEvent {
+                        status: status.to_string(),
+                        url: url.to_string(),
+                        file_name,
+                        path: path_string,
+                        success: Some(success),
+                        message: Some(message.to_string()),
+                    });
+                    true
+                }
+                _ => true,
+            }
+        });
+
+    window
+        .add_child(
+            builder,
+            LogicalPosition::new(options.x, options.y),
+            LogicalSize::new(options.width, options.height),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn fetch_favicon(url: String) -> Result<Option<String>, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
@@ -274,7 +542,7 @@ pub fn run() {
             .build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![chat_stream, eval_js, encrypt_value, decrypt_value, fetch_favicon])
+        .invoke_handler(tauri::generate_handler![chat_stream, eval_js, create_service_webview, encrypt_value, decrypt_value, fetch_favicon])
         .setup(|app| {
             use tauri::Manager;
             use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};

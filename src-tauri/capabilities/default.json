@@ -15,6 +15,7 @@
     "core:window:allow-close",
     "core:window:allow-hide",
     "core:window:allow-show",
+    "core:window:allow-set-theme",
     "core:window:allow-set-focus",
     "core:window:allow-set-decorations",
     "core:webview:allow-create-webview",
@@ -39,6 +40,7 @@
       ]
     },
     "fs:default",
+    "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-write-file",
     "window-state:default",

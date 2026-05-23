@@ -59,14 +59,16 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
 
         <button
           class="rs-btn"
-          :class="{ active: activeRightPanel === 'vibe-coding' }"
-          title="Vibe Coding"
-          @click="toggleRightPanel('vibe-coding')"
+          :class="{ active: activeRightPanel === 'command-center' }"
+          title="命令中心"
+          @click="toggleRightPanel('command-center')"
         >
           <div class="rs-icon-wrapper">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="16 18 22 12 16 6"></polyline>
-              <polyline points="8 6 2 12 8 18"></polyline>
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <path d="M7 8h10"></path>
+              <path d="M7 12h6"></path>
+              <path d="M7 16h8"></path>
             </svg>
           </div>
         </button>
@@ -81,20 +83,20 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
   display: flex;
   align-items: center;
   height: 100%;
-  background: var(--bg-primary, #0a0f16); /* Add a solid base behind the glass to prevent webview bleed if necessary */
+  background: var(--bg-primary, #ffffff);
   padding: 0 12px 0 12px; 
-  flex-shrink: 0; /* Prevent shrinking in flex container */
+  flex-shrink: 0;
   z-index: 200;
-  border-left: 1px solid rgba(255, 255, 255, 0.05); /* Clean separator from content area */
+  border-left: 1px solid var(--border-color, #e0e0e0);
 }
 
 .right-sidebar {
   width: 48px;
-  background: rgba(20, 20, 20, 0.6);
+  background: var(--bg-secondary, #f5f5f5);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  border: 1px solid var(--border-color, #e0e0e0);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255,255,255,0.55);
   border-radius: 24px;
   display: flex;
   flex-direction: column;
@@ -102,6 +104,10 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
   padding: 16px 0;
   gap: 12px;
   flex-shrink: 0;
+}
+
+:global(:root.dark) .right-sidebar {
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
 .rs-group {
@@ -115,7 +121,7 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
 .rs-divider {
   width: 24px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  background: linear-gradient(90deg, transparent, var(--border-color, #e0e0e0), transparent);
   margin: 4px 0;
 }
 
@@ -129,7 +135,7 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
   background: transparent;
   border: none;
   border-radius: 12px;
-  color: #a1a1aa; /* Zinc 400 */
+  color: var(--text-secondary, #666666);
   cursor: pointer;
   outline: none;
 }
@@ -146,16 +152,25 @@ const { activeRightPanel, toggleRightPanel } = useServiceManager()
 }
 
 .rs-btn:hover .rs-icon-wrapper {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--bg-tertiary, #e8e8e8);
+  color: var(--text-primary, #1a1a1a);
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(15,23,42,0.12);
 }
 
 .rs-btn.active .rs-icon-wrapper {
-  background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
-  color: #ffffff;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2);
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent, #2563eb);
+  box-shadow: 0 8px 20px rgba(37,99,235,0.16), inset 0 1px 1px rgba(255,255,255,0.25);
   transform: scale(1);
+}
+
+:global(:root.dark) .rs-btn:hover .rs-icon-wrapper {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+:global(:root.dark) .rs-btn.active .rs-icon-wrapper {
+  background: rgba(96, 165, 250, 0.18);
+  color: #bfdbfe;
 }
 </style>

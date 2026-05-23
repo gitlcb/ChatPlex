@@ -193,9 +193,6 @@ function handleServiceClose(serviceId: string) {
             :class="{ active: activeCategory === cat.value }"
             @click="setCategory(cat.value)"
           >
-            <svg v-if="activeCategory === cat.value" class="seg-check" width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6.5L5 9l4.5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
             <span>{{ cat.label }}</span>
           </button>
         </div>
@@ -210,9 +207,6 @@ function handleServiceClose(serviceId: string) {
             :class="{ active: activeRegion === r.value }"
             @click="setRegion(r.value)"
           >
-            <svg v-if="activeRegion === r.value" class="seg-check" width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6.5L5 9l4.5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
             <span>{{ r.label }}</span>
           </button>
         </div>
@@ -250,8 +244,8 @@ function handleServiceClose(serviceId: string) {
 .sidebar {
   width: 200px;
   height: 100%;
-  background: #0c1017;
-  border-right: 1px solid #1a2435;
+  background: var(--bg-sidebar, #f8f9fa);
+  border-right: 1px solid var(--border-color, #e0e0e0);
   display: flex;
   flex-direction: column;
   transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1);
@@ -272,7 +266,7 @@ function handleServiceClose(serviceId: string) {
   align-items: center;
   padding: 12px 14px;
   gap: 10px;
-  border-bottom: 1px solid #1a2435;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
   min-height: 52px;
   flex-shrink: 0;
   cursor: pointer;
@@ -288,11 +282,18 @@ function handleServiceClose(serviceId: string) {
   background-clip: text;
 }
 
+:global(:root.dark) .logo-text {
+  background: linear-gradient(135deg, #93c5fd, #c4b5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .sidebar-toggle {
   margin-left: auto;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--text-muted, #999999);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -302,35 +303,48 @@ function handleServiceClose(serviceId: string) {
   transition: all 0.2s;
   flex-shrink: 0;
 }
-.sidebar-toggle:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); }
+.sidebar-toggle:hover { color: var(--text-primary, #1a1a1a); background: var(--bg-tertiary, #e8e8e8); }
 
 .expand-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--text-muted, #999999);
   transition: color 0.18s;
   flex-shrink: 0;
 }
-.sidebar-header:hover .expand-icon { color: #e2e8f0; }
+.sidebar-header:hover .expand-icon { color: var(--text-primary, #1a1a1a); }
 
 /* Service List */
 .service-list {
   flex: 1; overflow-y: auto; padding: 6px 6px;
-  scrollbar-width: thin; scrollbar-color: #1a2435 transparent;
+  scrollbar-width: thin; scrollbar-color: var(--bg-tertiary, #e8e8e8) transparent;
 }
 
 .service-btn {
   display: flex; align-items: center; width: 100%;
   padding: 9px 10px; margin-bottom: 1px;
   background: transparent; border: none; border-radius: 8px;
-  color: #94a3b8; cursor: pointer; transition: all 0.18s ease;
+  color: var(--text-secondary, #666666); cursor: pointer; transition: all 0.18s ease;
   position: relative; gap: 10px; text-align: left; overflow: hidden;
 }
-.service-btn:hover { background: rgba(255,255,255,0.04); color: #e2e8f0; }
-.service-btn.active { background: rgba(59,130,246,0.1); color: #e2e8f0; }
-.service-btn.active:hover { background: rgba(59,130,246,0.15); }
+.service-btn:hover { background: var(--bg-secondary, #f5f5f5); color: var(--text-primary, #1a1a1a); }
+.service-btn.active { background: rgba(37,99,235,0.1); color: var(--text-primary, #1a1a1a); }
+.service-btn.active:hover { background: rgba(37,99,235,0.15); }
 .service-btn.has-error { color: #f87171; }
+
+:global(:root.dark) .service-btn:hover {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+:global(:root.dark) .service-btn.active {
+  background: rgba(96, 165, 250, 0.16);
+  color: var(--text-primary, #f8fafc);
+}
+
+:global(:root.dark) .service-btn.active:hover {
+  background: rgba(96, 165, 250, 0.22);
+}
 
 .service-indicator {
   position: absolute; left: 0; top: 50%;
@@ -361,15 +375,17 @@ function handleServiceClose(serviceId: string) {
 .service-info {
   display: flex; align-items: center; gap: 6px;
   flex: 1; min-width: 0; overflow: hidden;
+  color: inherit;
 }
 .service-name {
   font-size: 13px; font-weight: 500; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
+  color: inherit;
 }
 .error-dot { font-size: 11px; flex-shrink: 0; }
 
 .service-close {
-  background: rgba(255,255,255,0.08); border: none; color: #64748b;
+  background: var(--bg-tertiary, #e8e8e8); border: none; color: var(--text-muted, #999999);
   width: 18px; height: 18px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0; transition: all 0.15s; padding: 0; margin-left: auto;
@@ -387,7 +403,7 @@ function handleServiceClose(serviceId: string) {
 
 /* Footer — Segmented Control */
 .sidebar-footer {
-  padding: 10px 10px 14px; border-top: 1px solid #1a2435;
+  padding: 10px 10px 14px; border-top: 1px solid var(--border-color, #e0e0e0);
   flex-shrink: 0; display: flex; flex-direction: column; gap: 6px;
   overflow: hidden;
   transition: opacity 0.22s ease, max-height 0.35s cubic-bezier(0.32,0.72,0,1), padding 0.35s cubic-bezier(0.32,0.72,0,1), border-color 0.35s;
@@ -405,16 +421,16 @@ function handleServiceClose(serviceId: string) {
 .seg-group { display: flex; }
 .seg-track {
   flex: 1; display: flex; position: relative;
-  background: #090d13;
-  border: 1px solid #1e293b;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 12px; padding: 3px;
 }
 .seg-indicator {
   position: absolute; top: 3px; left: 3px; bottom: 3px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--bg-tertiary, #e8e8e8);
+  border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 9px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: 0 1px 3px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.35);
   transition: transform 0.3s cubic-bezier(0.34,1.4,0.64,1), width 0.3s;
   z-index: 0;
 }
@@ -422,14 +438,29 @@ function handleServiceClose(serviceId: string) {
   flex: 1; position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: center; gap: 3px;
   padding: 4px 0; border: none; border-radius: 9px;
-  background: transparent; color: #64748b; font-size: 11px;
+  background: transparent; color: var(--text-muted, #999999); font-size: 11px;
   font-weight: 500; cursor: pointer; text-align: center;
   transition: color 0.2s;
   line-height: 1;
 }
-.seg-btn:hover { color: #94a3b8; }
-.seg-btn.active { color: #e2e8f0; }
-.seg-check { flex-shrink: 0; opacity: 0.7; }
+.seg-btn:hover { color: var(--text-secondary, #666666); }
+.seg-btn.active { color: var(--text-primary, #1a1a1a); }
+
+:global(:root.dark) .service-info,
+:global(:root.dark) .service-name,
+:global(:root.dark) .seg-btn,
+:global(:root.dark) .seg-btn span {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+:global(:root.dark) .service-btn.active .service-info,
+:global(:root.dark) .service-btn.active .service-name,
+:global(:root.dark) .seg-btn.active,
+:global(:root.dark) .seg-btn.active span {
+  color: #f8fafc !important;
+}
 
 /* Context Menu */
 .ctx-overlay {
@@ -437,9 +468,9 @@ function handleServiceClose(serviceId: string) {
 }
 .ctx-menu {
   position: fixed; z-index: 10001;
-  background: #1e293b; border: 1px solid #334155;
+  background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 10px; padding: 4px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+  box-shadow: 0 8px 24px rgba(15,23,42,0.18), 0 0 0 1px rgba(255,255,255,0.35);
   min-width: 120px;
   animation: ctxIn 0.12s cubic-bezier(0.34,1.2,0.64,1);
 }
@@ -450,10 +481,10 @@ function handleServiceClose(serviceId: string) {
 .ctx-item {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 6px 10px; border: none; border-radius: 7px;
-  background: transparent; color: #94a3b8; font-size: 12px;
+  background: transparent; color: var(--text-secondary, #666666); font-size: 12px;
   cursor: pointer; transition: background 0.12s, color 0.12s;
 }
-.ctx-item:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.ctx-item:hover { background: var(--bg-tertiary, #e8e8e8); color: var(--text-primary, #1a1a1a); }
 .ctx-close:hover { background: rgba(239,68,68,0.12); color: #f87171; }
 
 /* Collapsed */
